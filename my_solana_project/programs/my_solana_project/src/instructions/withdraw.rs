@@ -20,13 +20,11 @@ pub struct Withdraw<'info> {
 }
 
 pub fn handler(ctx: Context<Withdraw>, vault_seed: String, amount: u64) -> Result<()> {
-    // 1. Cek saldo menggunakan referensi immutable sementara
     require!(
         ctx.accounts.vault_state.total_funds >= amount,
         MyError::InsufficientFunds
     );
 
-    // 2. Siapkan seeds untuk PDA signing
     let seeds = &[
         b"vault".as_ref(),
         vault_seed.as_bytes(),
@@ -34,23 +32,20 @@ pub fn handler(ctx: Context<Withdraw>, vault_seed: String, amount: u64) -> Resul
     ];
     let signer_seeds = &[&seeds[..]];
 
-    // 3. Eksekusi Transfer (meminjam account secara immutable)
     let cpi_accounts = anchor_lang::system_program::Transfer {
         from: ctx.accounts.vault_state.to_account_info(),
         to: ctx.accounts.admin.to_account_info(),
     };
 
-    let cpi_ctx = CpiContext::new_with_signer(
-        ctx.accounts.system_program.key(),
-        cpi_accounts,
-        signer_seeds,
-    );
+    // Anchor v1: CpiContext::new_with_signer menerima Pubkey, bukan AccountInfo
+    let cpi_ctx = CpiContext::new_with_signer(System::id(), cpi_accounts, signer_seeds);
 
     anchor_lang::system_program::transfer(cpi_ctx, amount)?;
 
-    // 4. Update saldo (baru pinjam secara mutable di sini)
     let vault_state = &mut ctx.accounts.vault_state;
-    vault_state.total_funds = vault_state.total_funds.checked_sub(amount).unwrap();
+    vault_state.total_funds = vault_state.total_funds
+        .checked_sub(amount)
+        .ok_or(error!(MyError::ArithmeticOverflow))?;
 
     Ok(())
 }

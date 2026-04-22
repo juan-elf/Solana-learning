@@ -1,5 +1,5 @@
-import * as anchor from "@coral-xyz/anchor";
-import { Program } from "@coral-xyz/anchor";
+import * as anchor from "@anchor-lang/core";
+import { Program } from "@anchor-lang/core";
 import { expect } from "chai";
 
 describe("my_solana_project", () => {
@@ -24,7 +24,7 @@ describe("my_solana_project", () => {
       })
       .rpc();
 
-    const account = await program.account.vaultState.fetch(vaultPDA);
+    const account = await (program.account as any).vaultState.fetch(vaultPDA);
     expect(account.admin.toBase58()).to.equal(provider.wallet.publicKey.toBase58());
     expect(account.totalFunds.toNumber()).to.equal(0);
   });
@@ -46,7 +46,7 @@ describe("my_solana_project", () => {
       })
       .rpc();
 
-    const account = await program.account.vaultState.fetch(vaultPDA);
+    const account = await (program.account as any).vaultState.fetch(vaultPDA);
     expect(account.totalFunds.toNumber()).to.equal(depositAmount.toNumber());
   });
 
@@ -67,7 +67,39 @@ describe("my_solana_project", () => {
       })
       .rpc();
 
-    const account = await program.account.vaultState.fetch(vaultPDA);
+    const account = await (program.account as any).vaultState.fetch(vaultPDA);
     expect(account.totalFunds.toNumber()).to.equal(0.5 * anchor.web3.LAMPORTS_PER_SOL);
+  });
+
+  it("Should fail when a non-admin tries to withdraw", async () => {
+    const [vaultPDA] = anchor.web3.PublicKey.findProgramAddressSync(
+      [Buffer.from("vault"), Buffer.from(vaultSeed)],
+      program.programId
+    );
+
+    const attacker = anchor.web3.Keypair.generate();
+
+    const airdropSig = await provider.connection.requestAirdrop(
+        attacker.publicKey,
+        1 * anchor.web3.LAMPORTS_PER_SOL
+    );
+    await provider.connection.confirmTransaction(airdropSig);
+
+    try {
+      await program.methods
+        .withdraw(vaultSeed, new anchor.BN(0.1 * anchor.web3.LAMPORTS_PER_SOL))
+        .accounts({
+          vaultState: vaultPDA,
+          admin: attacker.publicKey,
+          systemProgram: anchor.web3.SystemProgram.programId,
+        })
+        .signers([attacker])
+        .rpc();
+
+      expect.fail("Withdraw harus gagal untuk non-admin");
+    } catch (err: any) {
+      expect(err.toString()).to.contain("ConstraintHasOne");
+      console.log("Security check passed: Non-admin tidak bisa withdraw!");
+    }
   });
 });

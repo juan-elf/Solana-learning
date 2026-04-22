@@ -1,5 +1,6 @@
 use anchor_lang::prelude::*;
 use crate::state::VaultState;
+use crate::error::MyError;
 
 #[derive(Accounts)]
 #[instruction(vault_seed: String)]
@@ -23,14 +24,16 @@ pub fn handler(ctx: Context<Deposit>, amount: u64) -> Result<()> {
         to: ctx.accounts.vault_state.to_account_info(),
     };
 
-    // Gunakan .key() alih-alih .to_account_info() untuk argumen pertama
-    let cpi_ctx = CpiContext::new(ctx.accounts.system_program.key(), cpi_accounts);
+    // Anchor v1: CpiContext::new menerima Pubkey, bukan AccountInfo
+    let cpi_ctx = CpiContext::new(System::id(), cpi_accounts);
 
     anchor_lang::system_program::transfer(cpi_ctx, amount)?;
 
     let vault = &mut ctx.accounts.vault_state;
-    vault.total_funds = vault.total_funds.checked_add(amount).unwrap();
+    vault.total_funds = vault.total_funds
+        .checked_add(amount)
+        .ok_or(error!(MyError::ArithmeticOverflow))?;
 
-    msg!("Successfully Deposit, total vault: {}", vault.total_funds);
+    msg!("Deposit berhasil, total vault: {}", vault.total_funds);
     Ok(())
 }
