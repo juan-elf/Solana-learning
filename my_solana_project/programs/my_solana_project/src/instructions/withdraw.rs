@@ -15,37 +15,37 @@ pub struct Withdraw<'info> {
 
     #[account(mut)]
     pub admin: Signer<'info>,
-
-    pub system_program: Program<'info, System>,
 }
 
-pub fn handler(ctx: Context<Withdraw>, vault_seed: String, amount: u64) -> Result<()> {
+pub fn handler(ctx: Context<Withdraw>, _vault_seed: String, amount: u64) -> Result<()> {
+    require!(amount > 0, MyError::InvalidAmount);
     require!(
         ctx.accounts.vault_state.total_funds >= amount,
         MyError::InsufficientFunds
     );
 
-    let seeds = &[
-        b"vault".as_ref(),
-        vault_seed.as_bytes(),
-        &[ctx.accounts.vault_state.bump],
-    ];
-    let signer_seeds = &[&seeds[..]];
-
-    let cpi_accounts = anchor_lang::system_program::Transfer {
-        from: ctx.accounts.vault_state.to_account_info(),
-        to: ctx.accounts.admin.to_account_info(),
-    };
-
-    // Anchor v1: CpiContext::new_with_signer menerima Pubkey, bukan AccountInfo
-    let cpi_ctx = CpiContext::new_with_signer(System::id(), cpi_accounts, signer_seeds);
-
-    anchor_lang::system_program::transfer(cpi_ctx, amount)?;
+    // PDA accounts yang punya data tidak bisa di-transfer via system program.
+    // Gunakan direct lamport manipulation agar bisa withdraw dari PDA berisi data.
+    {
+        let vault_info = ctx.accounts.vault_state.to_account_info();
+        let current = vault_info.lamports();
+        **vault_info.try_borrow_mut_lamports()? = current
+            .checked_sub(amount)
+            .ok_or(error!(MyError::ArithmeticOverflow))?;
+    }
+    {
+        let admin_info = ctx.accounts.admin.to_account_info();
+        let current = admin_info.lamports();
+        **admin_info.try_borrow_mut_lamports()? = current
+            .checked_add(amount)
+            .ok_or(error!(MyError::ArithmeticOverflow))?;
+    }
 
     let vault_state = &mut ctx.accounts.vault_state;
     vault_state.total_funds = vault_state.total_funds
         .checked_sub(amount)
         .ok_or(error!(MyError::ArithmeticOverflow))?;
 
+    msg!("Withdrew {} lamports from vault", amount);
     Ok(())
 }

@@ -19,7 +19,7 @@ pub struct Initialize<'info> {
     pub system_program: Program<'info, System>,
 }
 
-pub fn handler(ctx: Context<Initialize>, vault_seed: String) -> Result<()> {
+pub fn handler(ctx: Context<Initialize>, _vault_seed: String) -> Result<()> {
     let vault_state = &mut ctx.accounts.vault_state;
     let user = &ctx.accounts.user;
     let clock = Clock::get()?; // Mengambil waktu blockchain

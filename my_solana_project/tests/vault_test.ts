@@ -7,14 +7,20 @@ describe("my_solana_project", () => {
   anchor.setProvider(provider);
 
   const program = anchor.workspace.MySolanaProject as Program<any>;
-  const vaultSeed = "my_test_vault";
 
-  it("Initializes the vault", async () => {
-    const [vaultPDA] = anchor.web3.PublicKey.findProgramAddressSync(
+  // Unique seed per test run — avoids stale on-chain state from prior sessions
+  const vaultSeed = `vault_${Date.now()}`;
+
+  let vaultPDA: anchor.web3.PublicKey;
+
+  before(async () => {
+    [vaultPDA] = anchor.web3.PublicKey.findProgramAddressSync(
       [Buffer.from("vault"), Buffer.from(vaultSeed)],
       program.programId
     );
+  });
 
+  it("Initializes the vault", async () => {
     await program.methods
       .initialize(vaultSeed)
       .accounts({
@@ -27,14 +33,10 @@ describe("my_solana_project", () => {
     const account = await (program.account as any).vaultState.fetch(vaultPDA);
     expect(account.admin.toBase58()).to.equal(provider.wallet.publicKey.toBase58());
     expect(account.totalFunds.toNumber()).to.equal(0);
+    expect(account.isActive).to.equal(true);
   });
 
   it("Deposits funds into the vault", async () => {
-    const [vaultPDA] = anchor.web3.PublicKey.findProgramAddressSync(
-      [Buffer.from("vault"), Buffer.from(vaultSeed)],
-      program.programId
-    );
-
     const depositAmount = new anchor.BN(1 * anchor.web3.LAMPORTS_PER_SOL);
 
     await program.methods
@@ -51,11 +53,6 @@ describe("my_solana_project", () => {
   });
 
   it("Withdraws funds from the vault", async () => {
-    const [vaultPDA] = anchor.web3.PublicKey.findProgramAddressSync(
-      [Buffer.from("vault"), Buffer.from(vaultSeed)],
-      program.programId
-    );
-
     const withdrawAmount = new anchor.BN(0.5 * anchor.web3.LAMPORTS_PER_SOL);
 
     await program.methods
@@ -63,7 +60,6 @@ describe("my_solana_project", () => {
       .accounts({
         vaultState: vaultPDA,
         admin: provider.wallet.publicKey,
-        systemProgram: anchor.web3.SystemProgram.programId,
       })
       .rpc();
 
@@ -72,18 +68,17 @@ describe("my_solana_project", () => {
   });
 
   it("Should fail when a non-admin tries to withdraw", async () => {
-    const [vaultPDA] = anchor.web3.PublicKey.findProgramAddressSync(
-      [Buffer.from("vault"), Buffer.from(vaultSeed)],
-      program.programId
-    );
-
     const attacker = anchor.web3.Keypair.generate();
 
-    const airdropSig = await provider.connection.requestAirdrop(
-        attacker.publicKey,
-        1 * anchor.web3.LAMPORTS_PER_SOL
+    // Fund attacker from provider wallet (avoids devnet airdrop rate limits)
+    const fundTx = new anchor.web3.Transaction().add(
+      anchor.web3.SystemProgram.transfer({
+        fromPubkey: provider.wallet.publicKey,
+        toPubkey: attacker.publicKey,
+        lamports: 0.01 * anchor.web3.LAMPORTS_PER_SOL,
+      })
     );
-    await provider.connection.confirmTransaction(airdropSig);
+    await provider.sendAndConfirm(fundTx);
 
     try {
       await program.methods
@@ -91,7 +86,6 @@ describe("my_solana_project", () => {
         .accounts({
           vaultState: vaultPDA,
           admin: attacker.publicKey,
-          systemProgram: anchor.web3.SystemProgram.programId,
         })
         .signers([attacker])
         .rpc();

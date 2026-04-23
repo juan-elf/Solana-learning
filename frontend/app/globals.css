@@ -1,0 +1,34 @@
+@import "tailwindcss";
+
+:root {
+  --background: #020617;
+  --foreground: #f8fafc;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+}
+
+/* Override wallet adapter button styling */
+.wallet-adapter-button {
+  background: rgb(124 58 237) !important;
+  border-radius: 0.5rem !important;
+  font-size: 0.875rem !important;
+  height: 2.25rem !important;
+  padding: 0 1rem !important;
+}
+.wallet-adapter-button:hover {
+  background: rgb(109 40 217) !important;
+}
+.wallet-adapter-modal-wrapper {
+  background: rgb(15 23 42) !important;
+}
+

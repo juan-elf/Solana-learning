@@ -22,4 +22,16 @@ pub enum MyError {
 
     #[msg("Data akun tidak valid atau panjang tidak mencukupi.")]
     InvalidAccountData,
+
+    #[msg("Pair tidak aktif.")]
+    PairNotActive,
+
+    #[msg("Amount melebihi max alokasi yang diizinkan untuk pair ini.")]
+    ExceedsMaxAllocation,
+
+    #[msg("Program ID Jupiter tidak valid.")]
+    InvalidJupiterProgram,
+
+    #[msg("Pair sudah dalam state yang sama.")]
+    PairStateUnchanged,
 }

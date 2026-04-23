@@ -6,3 +6,4 @@ node_modules/
 *.log
 .env
 .env.*
+my_solana_project/app/signal_bot.ts
