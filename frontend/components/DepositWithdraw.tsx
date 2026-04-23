@@ -4,17 +4,18 @@ import { useState } from "react";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { PublicKey, LAMPORTS_PER_SOL } from "@solana/web3.js";
 import * as anchor from "@anchor-lang/core";
-import { getProgram, VAULT_SEED } from "@/lib/program";
+import { getProgram } from "@/lib/program";
 
 interface Props {
   vaultPDA: PublicKey | null;
+  vaultSeed: string;
   isAdmin: boolean;
   onSuccess: () => void;
 }
 
 type Tab = "deposit" | "withdraw";
 
-export default function DepositWithdraw({ vaultPDA, isAdmin, onSuccess }: Props) {
+export default function DepositWithdraw({ vaultPDA, vaultSeed, isAdmin, onSuccess }: Props) {
   const wallet = useWallet();
   const [tab, setTab] = useState<Tab>("deposit");
   const [amount, setAmount] = useState("");
@@ -22,7 +23,7 @@ export default function DepositWithdraw({ vaultPDA, isAdmin, onSuccess }: Props)
   const [error, setError] = useState("");
 
   const handleSubmit = async () => {
-    if (!wallet.publicKey || !wallet.signTransaction || !vaultPDA) return;
+    if (!wallet.publicKey || !wallet.signTransaction || !vaultPDA || !vaultSeed) return;
     const sol = parseFloat(amount);
     if (isNaN(sol) || sol <= 0) { setError("Masukkan jumlah yang valid"); return; }
     const lamports = Math.floor(sol * LAMPORTS_PER_SOL);
@@ -33,12 +34,12 @@ export default function DepositWithdraw({ vaultPDA, isAdmin, onSuccess }: Props)
       const program = getProgram(wallet as unknown as import("@/lib/program").BrowserWallet);
       if (tab === "deposit") {
         await program.methods
-          .deposit(VAULT_SEED, new anchor.BN(lamports))
+          .deposit(vaultSeed, new anchor.BN(lamports))
           .accounts({ vaultState: vaultPDA, user: wallet.publicKey })
           .rpc();
       } else {
         await program.methods
-          .withdraw(VAULT_SEED, new anchor.BN(lamports))
+          .withdraw(vaultSeed, new anchor.BN(lamports))
           .accounts({ vaultState: vaultPDA, admin: wallet.publicKey })
           .rpc();
       }
@@ -51,7 +52,7 @@ export default function DepositWithdraw({ vaultPDA, isAdmin, onSuccess }: Props)
     }
   };
 
-  const connected = wallet.connected && vaultPDA;
+  const connected = wallet.connected && vaultPDA && vaultSeed;
 
   return (
     <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6 space-y-4">

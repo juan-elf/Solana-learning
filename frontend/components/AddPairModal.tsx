@@ -4,15 +4,16 @@ import { useState } from "react";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { PublicKey } from "@solana/web3.js";
 import * as anchor from "@anchor-lang/core";
-import { getProgram, getPairPDA, PROGRAM_ID, TOKEN_MINTS, VAULT_SEED } from "@/lib/program";
+import { getProgram, getPairPDA, PROGRAM_ID, TOKEN_MINTS } from "@/lib/program";
 
 interface Props {
   vaultPDA: PublicKey;
+  vaultSeed: string;
   onClose: () => void;
   onSuccess: () => void;
 }
 
-export default function AddPairModal({ vaultPDA, onClose, onSuccess }: Props) {
+export default function AddPairModal({ vaultPDA, vaultSeed, onClose, onSuccess }: Props) {
   const wallet = useWallet();
   const [symbol, setSymbol] = useState(Object.keys(TOKEN_MINTS)[0]);
   const [maxPct, setMaxPct] = useState("10");
@@ -34,18 +35,20 @@ export default function AddPairModal({ vaultPDA, onClose, onSuccess }: Props) {
     try {
       const program = getProgram(wallet as unknown as import("@/lib/program").BrowserWallet);
       await program.methods
-        .addPair(VAULT_SEED, maxBps)
-        .accounts({
-          vaultState: vaultPDA,
-          targetMint: mintPubkey,
-          pairConfig: pairPDA,
-          admin: wallet.publicKey,
-        })
+        .addPair(vaultSeed, maxBps)
+        .accounts({ vaultState: vaultPDA, targetMint: mintPubkey, pairConfig: pairPDA, admin: wallet.publicKey })
         .rpc();
       onSuccess();
       onClose();
     } catch (e: any) {
-      setError(e.message ?? "Transaction failed");
+      const msg: string = e.message ?? "Transaction failed";
+      if (msg.includes("0x0") || msg.includes("already in use")) {
+        setError("Pair ini sudah terdaftar di vault.");
+        onSuccess();
+        onClose();
+      } else {
+        setError(msg);
+      }
     } finally {
       setLoading(false);
     }
@@ -62,11 +65,8 @@ export default function AddPairModal({ vaultPDA, onClose, onSuccess }: Props) {
         <div className="space-y-3">
           <div>
             <label className="text-slate-400 text-xs mb-1.5 block">Token</label>
-            <select
-              value={symbol}
-              onChange={(e) => setSymbol(e.target.value)}
-              className="w-full rounded-lg bg-slate-800 border border-slate-700 text-white text-sm px-3 py-2 outline-none focus:border-purple-500"
-            >
+            <select value={symbol} onChange={(e) => setSymbol(e.target.value)}
+              className="w-full rounded-lg bg-slate-800 border border-slate-700 text-white text-sm px-3 py-2 outline-none focus:border-purple-500">
               {Object.entries(TOKEN_MINTS).map(([sym, { label }]) => (
                 <option key={sym} value={sym}>{sym} — {label}</option>
               ))}
@@ -76,15 +76,9 @@ export default function AddPairModal({ vaultPDA, onClose, onSuccess }: Props) {
           <div>
             <label className="text-slate-400 text-xs mb-1.5 block">Max Allocation (%)</label>
             <div className="flex items-center gap-2 rounded-lg bg-slate-800 border border-slate-700 px-3 py-2">
-              <input
-                type="number"
-                min="1"
-                max="100"
-                step="1"
-                value={maxPct}
+              <input type="number" min="1" max="100" step="1" value={maxPct}
                 onChange={(e) => setMaxPct(e.target.value)}
-                className="flex-1 bg-transparent text-white outline-none text-sm"
-              />
+                className="flex-1 bg-transparent text-white outline-none text-sm" />
               <span className="text-slate-400 text-sm">%</span>
             </div>
             <p className="text-slate-500 text-xs mt-1">Bot tidak akan swap lebih dari {maxPct || "0"}% dari vault per eksekusi</p>
@@ -94,17 +88,11 @@ export default function AddPairModal({ vaultPDA, onClose, onSuccess }: Props) {
         </div>
 
         <div className="flex gap-2 pt-1">
-          <button
-            onClick={onClose}
-            className="flex-1 py-2 rounded-lg border border-slate-700 text-slate-400 hover:text-slate-200 text-sm transition-colors"
-          >
+          <button onClick={onClose} className="flex-1 py-2 rounded-lg border border-slate-700 text-slate-400 hover:text-slate-200 text-sm transition-colors">
             Cancel
           </button>
-          <button
-            onClick={handleAdd}
-            disabled={loading}
-            className="flex-1 py-2 rounded-lg bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white text-sm font-semibold transition-colors"
-          >
+          <button onClick={handleAdd} disabled={loading}
+            className="flex-1 py-2 rounded-lg bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white text-sm font-semibold transition-colors">
             {loading ? "Adding…" : "Add Pair"}
           </button>
         </div>

@@ -3,7 +3,6 @@ import * as anchor from "@anchor-lang/core";
 import { IDL } from "./idl";
 
 export const PROGRAM_ID = new PublicKey("FtUGETcAzSFmdjf6gzZKwBYKqp7CoYjykiw8gQ4ZgsjX");
-export const VAULT_SEED = process.env.NEXT_PUBLIC_VAULT_SEED ?? "my_test_vault";
 export const RPC_URL = process.env.NEXT_PUBLIC_RPC_URL ?? clusterApiUrl("devnet");
 
 export const TOKEN_MINTS: Record<string, { mint: string; label: string }> = {
@@ -12,6 +11,11 @@ export const TOKEN_MINTS: Record<string, { mint: string; label: string }> = {
   BONK: { mint: "DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263", label: "Bonk" },
   WIF:  { mint: "EKpQGSJtjMFqKZ9KQanSqYXRcF8fBopzLHYxdM65zcjm", label: "dogwifhat" },
 };
+
+// Derive vault seed otomatis dari wallet pubkey — setiap wallet punya vault sendiri
+export function getVaultSeed(pubkey: PublicKey): string {
+  return `vault_${pubkey.toBase58().slice(0, 8)}`;
+}
 
 export function mintLabel(mintAddress: string): string {
   const entry = Object.entries(TOKEN_MINTS).find(([, v]) => v.mint === mintAddress);
@@ -34,9 +38,9 @@ export function getProgram(wallet: BrowserWallet) {
   return new anchor.Program(IDL as unknown as anchor.Idl, provider);
 }
 
-export function getVaultPDA(programId: PublicKey): PublicKey {
+export function getVaultPDA(programId: PublicKey, seed: string): PublicKey {
   const [pda] = PublicKey.findProgramAddressSync(
-    [Buffer.from("vault"), Buffer.from(VAULT_SEED)],
+    [Buffer.from("vault"), Buffer.from(seed)],
     programId
   );
   return pda;

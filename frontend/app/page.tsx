@@ -10,15 +10,17 @@ import AddPairModal from "@/components/AddPairModal";
 
 export default function Home() {
   const [vaultPDA, setVaultPDA] = useState<PublicKey | null>(null);
+  const [vaultSeed, setVaultSeed] = useState("");
   const [isAdmin, setIsAdmin] = useState(false);
   const [showAddPair, setShowAddPair] = useState(false);
   const [refreshTick, setRefreshTick] = useState(0);
 
   const refresh = useCallback(() => setRefreshTick((n) => n + 1), []);
 
-  const handleVaultLoaded = useCallback((pda: PublicKey, admin: boolean) => {
+  const handleVaultLoaded = useCallback((pda: PublicKey, admin: boolean, seed: string) => {
     setVaultPDA(pda);
     setIsAdmin(admin);
+    setVaultSeed(seed);
   }, []);
 
   return (
@@ -28,11 +30,12 @@ export default function Home() {
       <main className="flex-1 max-w-5xl mx-auto w-full px-4 py-8 space-y-6">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <VaultCard onVaultLoaded={handleVaultLoaded} refreshTrigger={refreshTick} />
-          <DepositWithdraw vaultPDA={vaultPDA} isAdmin={isAdmin} onSuccess={refresh} />
+          <DepositWithdraw vaultPDA={vaultPDA} vaultSeed={vaultSeed} isAdmin={isAdmin} onSuccess={refresh} />
         </div>
 
         <PairsTable
           vaultPDA={vaultPDA}
+          vaultSeed={vaultSeed}
           isAdmin={isAdmin}
           refreshTrigger={refreshTick}
           onOpenAddPair={() => setShowAddPair(true)}
@@ -55,6 +58,7 @@ export default function Home() {
       {showAddPair && vaultPDA && (
         <AddPairModal
           vaultPDA={vaultPDA}
+          vaultSeed={vaultSeed}
           onClose={() => setShowAddPair(false)}
           onSuccess={refresh}
         />
