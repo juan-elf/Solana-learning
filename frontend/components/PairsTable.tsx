@@ -74,7 +74,7 @@ export default function PairsTable({ vaultPDA, vaultSeed, isAdmin, refreshTrigge
       const program = getProgram(wallet as unknown as import("@/lib/program").BrowserWallet);
       await program.methods
         .togglePair(vaultSeed, !row.is_active)
-        .accounts({ vaultState: vaultPDA, targetMint: row.mint, pairConfig: row.pairPDA, admin: wallet.publicKey })
+        .accounts({ vault_state: vaultPDA, target_mint: row.mint, pair_config: row.pairPDA, admin: wallet.publicKey })
         .rpc();
       await fetchPairs();
     } catch (e: any) {

@@ -36,7 +36,7 @@ export default function AddPairModal({ vaultPDA, vaultSeed, onClose, onSuccess }
       const program = getProgram(wallet as unknown as import("@/lib/program").BrowserWallet);
       await program.methods
         .addPair(vaultSeed, maxBps)
-        .accounts({ vaultState: vaultPDA, targetMint: mintPubkey, pairConfig: pairPDA, admin: wallet.publicKey })
+        .accounts({ vault_state: vaultPDA, target_mint: mintPubkey, pair_config: pairPDA, admin: wallet.publicKey })
         .rpc();
       onSuccess();
       onClose();
