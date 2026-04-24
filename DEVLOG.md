@@ -132,6 +132,46 @@ Program ID: `FtUGETcAzSFmdjf6gzZKwBYKqp7CoYjykiw8gQ4ZgsjX`
 - **`vault_test.ts`**: Update import ke `@anchor-lang/core`. Fix error assertion dari `"ConstraintRaw"` ke `"ConstraintHasOne"` (sesuai Anchor v1).
 - **`jupiter_bot.ts`**: Fix ketiga address yang rusak (SOL mint, USDC mint, Jupiter program ID). Ganti `Transaction` ke `VersionedTransaction` (Jupiter API v6 mengembalikan versioned transaction). Update import ke `@anchor-lang/core`.
 
+#### Sesi 4 — Frontend Debug Marathon (Vercel + camelCase + invalid mint)
+
+Setelah deploy ke Vercel, vault muncul "Paused", balance 0.0000 SOL, Max Slippage NaN%, deposit/withdraw/add-pair tidak ada respon. Investigasi ketemu 3 bug berlapis:
+
+**Bug 1: Vault lama 49 bytes, tidak kompatibel struct baru (60 bytes)**
+- Commit awal (`2a1e135`) struct `VaultState` cuma `admin + total_funds + bump` (49 bytes). Commit `75e8a54` ekspansi jadi 60 bytes (`+ is_active + created_at + max_slippage_bps`).
+- Akun vault lama di devnet (seed `my_test_vault`) masih 49 bytes → program sekarang gagal deserialize, frontend baca byte offset 49 (is_active) → out of bounds → undefined → render "Paused".
+- Fix: sudah dibereskan di commit `b38aa31` dengan per-wallet seed (`vault_${pubkey.slice(0,8)}`) — vault lama ditinggalkan, user initialize vault baru 60-byte yang valid.
+
+**Bug 2: `@anchor-lang/core` v1 semuanya camelCase, bukan snake_case**
+- Asumsi sebelumnya salah. `Program` constructor jalanin `convertIdlToCamelCase(idl)` internal, jadi semua nama yang reachable via `program.account.*`, `program.methods.*`, `.accounts({...})`, dan field hasil decode itu **camelCase** — walau IDL asli pakai snake_case.
+- Verifikasi langsung decode dari devnet account `6RcMW8s...`:
+  ```
+  Decoded keys: admin, totalFunds, bump, isActive, createdAt, maxSlippageBps
+  acc.total_funds  → undefined
+  acc.totalFunds   → 19000000 ✓
+  ```
+- Dampak: seluruh field multi-kata (`total_funds`, `is_active`, `max_slippage_bps`, `total_swapped`, `swap_count`, `last_swapped_at`, `max_bps`) kebaca `undefined` → `?.toNumber() ?? 0` = 0, `undefined/100` = NaN, falsy bool → "Paused". Account names di `.accounts({...})` juga harus camelCase (`vaultState`, `targetMint`, `pairConfig`).
+- Fix (commit `620c3d0`): revert semua field access dan account keys ke camelCase di `VaultCard.tsx`, `PairsTable.tsx`, `DepositWithdraw.tsx`, `AddPairModal.tsx`.
+
+**Bug 3: Mint MET tidak valid → silent throw di luar try block**
+- Address `METADDFL6wWMWEoKDFJwpmV4gVgELib96hYKUaVL5a` cuma 42 karakter (Solana pubkey 43-44). `new PublicKey(mint)` throw `"Invalid public key input"`.
+- Throw-nya di baris `const mintPubkey = new PublicKey(mint)` — **di luar** `try {}` di `AddPairModal.handleAdd`. Akibatnya: error uncaught, `setLoading(true)` tidak pernah jalan, tidak ada spinner, tidak ada pesan merah di UI. Klik "Add Pair" kelihatan hang.
+- Fix (commit `174d9e4`): ganti MET → USDC devnet (`4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU`), dan pindahkan semua konstruksi `PublicKey` ke dalam try block supaya input invalid ke depan pun surface di UI.
+
+**Bug 4: Infinite re-render dari useWallet() object reference**
+- `useWallet()` return object reference baru setiap render. Kalau masuk ke `useCallback`/`useEffect` deps langsung, fetch loop tanpa henti.
+- Fix: extract primitive deps (`walletKey = publicKey?.toBase58() ?? ""`, `canSign = !!signTransaction`) dan pakai `walletRef.current` di dalam callback untuk baca snapshot wallet yang up-to-date tanpa retrigger.
+
+**Polishing lain-lain (commits 690e258 → 352c9c4 → 1b6efc6)**
+- Next.js 16 App Router SSR: `WalletMultiButton` di-load via `next/dynamic({ ssr: false })` + mounted gate untuk eliminasi hydration mismatch.
+- Buffer polyfill: `window.Buffer = Buffer` di `WalletProvider.tsx` — Anchor & web3.js bergantung pada Buffer global, Next.js App Router tidak auto-polyfill.
+- `app/error.tsx` error boundary dengan stack trace visible untuk debug runtime error Vercel.
+- Wrap semua `.toNumber()` dengan optional chaining (`?.toNumber() ?? 0`) untuk hindari crash saat baca field dari PDA yang belum ready.
+
+**Lesson learned**
+- Selalu cek real runtime behavior library (konversi nama, decoder output) daripada asumsi dari dokumentasi atau training data. Satu `node` script decode langsung dari devnet nyelesain spiral debugging panjang.
+- Akun on-chain yang tidak bisa dihapus tetap jadi bagian permanen state — kalau struct layout berubah, pertimbangkan instruksi `migrate`/`realloc` dari awal, atau seed versioning.
+- `new PublicKey(...)` di luar try block = bom silent. Bungkus semua user-derived input parsing dalam try/catch.
+
 ### 4. Testing & Deployment
 - **Local Tests**: Wrote comprehensive TypeScript tests in `tests/vault_test.ts`.
 - **Deployment**: Successfully deployed to Solana Devnet after resolving airdrop rate limits via web faucets.
@@ -171,5 +211,6 @@ Program ID: `FtUGETcAzSFmdjf6gzZKwBYKqp7CoYjykiw8gQ4ZgsjX`
 - [x] Withdraw fix: direct lamport manipulation untuk PDA berdata
 - [x] 4/4 integration tests passing di devnet
 - [x] Frontend web (Next.js 16 + wallet connect) — selesai, siap Vercel
+- [x] Deployed ke Vercel + live debug (camelCase IDL, invalid MET mint, Buffer polyfill, SSR hydration, per-wallet seed)
 - [ ] LiteSVM unit tests (Rust)
 - [ ] Meteora DLMM integration (Phase 2)
