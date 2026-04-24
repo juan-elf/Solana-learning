@@ -54,6 +54,20 @@ export const IDL = {
       ],
       args: [{ name: "vault_seed", type: "string" }, { name: "enabled", type: "bool" }],
     },
+    {
+      name: "withdraw_pair_tokens",
+      discriminator: [229, 233, 203, 235, 84, 73, 70, 225],
+      accounts: [
+        { name: "vault_state", pda: { seeds: [{ kind: "const", value: [118, 97, 117, 108, 116] }, { kind: "arg", path: "vault_seed" }] } },
+        { name: "target_mint" },
+        { name: "pair_config", pda: { seeds: [{ kind: "const", value: [112, 97, 105, 114, 95, 99, 111, 110, 102, 105, 103] }, { kind: "account", path: "vault_state" }, { kind: "account", path: "target_mint" }] } },
+        { name: "vault_token_account", writable: true },
+        { name: "admin_token_account", writable: true },
+        { name: "admin", writable: true, signer: true, relations: ["vault_state"] },
+        { name: "token_program", address: "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA" },
+      ],
+      args: [{ name: "vault_seed", type: "string" }, { name: "amount", type: "u64" }],
+    },
   ],
   accounts: [
     { name: "PairConfig", discriminator: [119, 167, 13, 129, 136, 228, 151, 77] },

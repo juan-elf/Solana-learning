@@ -1,4 +1,5 @@
 import { Connection, PublicKey, clusterApiUrl, Transaction, VersionedTransaction } from "@solana/web3.js";
+import { getAssociatedTokenAddressSync, TOKEN_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID } from "@solana/spl-token";
 import * as anchor from "@anchor-lang/core";
 import { IDL } from "./idl";
 
@@ -60,3 +61,16 @@ export function getPairPDA(programId: PublicKey, vaultPDA: PublicKey, mintPubkey
 export function lamportsToSol(lamports: number): string {
   return (lamports / 1e9).toFixed(4);
 }
+
+// ATA owned by the vault PDA — where DCA-swapped tokens accumulate.
+// `allowOwnerOffCurve = true` because vault PDA is not on the ed25519 curve.
+export function getVaultAta(vaultPDA: PublicKey, mint: PublicKey): PublicKey {
+  return getAssociatedTokenAddressSync(mint, vaultPDA, true);
+}
+
+// ATA owned by a regular wallet (admin).
+export function getUserAta(owner: PublicKey, mint: PublicKey): PublicKey {
+  return getAssociatedTokenAddressSync(mint, owner, false);
+}
+
+export { TOKEN_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID };

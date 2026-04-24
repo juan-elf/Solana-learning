@@ -2,9 +2,11 @@
 
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useWallet } from "@solana/wallet-adapter-react";
-import { PublicKey } from "@solana/web3.js";
+import { PublicKey, Connection } from "@solana/web3.js";
+import { getAccount, getMint } from "@solana/spl-token";
 import * as anchor from "@anchor-lang/core";
-import { getProgram, getPairPDA, mintLabel, lamportsToSol, PROGRAM_ID, TOKEN_MINTS } from "@/lib/program";
+import { getProgram, getPairPDA, getVaultAta, mintLabel, lamportsToSol, RPC_URL, PROGRAM_ID, TOKEN_MINTS } from "@/lib/program";
+import WithdrawPairModal from "./WithdrawPairModal";
 
 interface PairRow {
   symbol: string;
@@ -15,6 +17,8 @@ interface PairRow {
   totalSwapped: anchor.BN;
   swapCount: number;
   lastSwappedAt: anchor.BN;
+  tokenBalance: bigint;
+  tokenDecimals: number;
 }
 
 interface Props {
@@ -30,6 +34,7 @@ export default function PairsTable({ vaultPDA, vaultSeed, isAdmin, refreshTrigge
   const [pairs, setPairs] = useState<PairRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [toggling, setToggling] = useState<string | null>(null);
+  const [withdrawTarget, setWithdrawTarget] = useState<PairRow | null>(null);
 
   const walletRef = useRef(wallet);
   walletRef.current = wallet;
@@ -42,6 +47,7 @@ export default function PairsTable({ vaultPDA, vaultSeed, isAdmin, refreshTrigge
     const w = walletRef.current;
     if (!w.publicKey || !w.signTransaction || !vaultKey) return;
     const vaultPDALocal = new PublicKey(vaultKey);
+    const conn = new Connection(RPC_URL, "confirmed");
     setLoading(true);
     try {
       const program = getProgram(w as unknown as import("@/lib/program").BrowserWallet);
@@ -51,7 +57,17 @@ export default function PairsTable({ vaultPDA, vaultSeed, isAdmin, refreshTrigge
         const pairPDA = getPairPDA(PROGRAM_ID, vaultPDALocal, mintPubkey);
         try {
           const acc = await (program.account as any).pairConfig.fetch(pairPDA);
-          rows.push({ symbol, mint: mintPubkey, pairPDA, isActive: acc.isActive, maxBps: acc.maxBps, totalSwapped: acc.totalSwapped, swapCount: acc.swapCount, lastSwappedAt: acc.lastSwappedAt });
+          const vaultAta = getVaultAta(vaultPDALocal, mintPubkey);
+          const [tokenBalance, tokenDecimals] = await Promise.all([
+            getAccount(conn, vaultAta).then((a) => a.amount).catch(() => 0n),
+            getMint(conn, mintPubkey).then((m) => m.decimals).catch(() => 0),
+          ]);
+          rows.push({
+            symbol, mint: mintPubkey, pairPDA,
+            isActive: acc.isActive, maxBps: acc.maxBps,
+            totalSwapped: acc.totalSwapped, swapCount: acc.swapCount, lastSwappedAt: acc.lastSwappedAt,
+            tokenBalance, tokenDecimals,
+          });
         } catch { /* pair not registered */ }
       }
       setPairs(rows);
@@ -84,6 +100,12 @@ export default function PairsTable({ vaultPDA, vaultSeed, isAdmin, refreshTrigge
     }
   };
 
+  const formatTokenBalance = (amount: bigint, decimals: number) => {
+    if (amount === 0n) return "0";
+    const display = Number(amount) / 10 ** decimals;
+    return display < 0.0001 ? display.toExponential(2) : display.toFixed(Math.min(decimals, 4));
+  };
+
   if (!vaultPDA) return null;
 
   return (
@@ -113,16 +135,18 @@ export default function PairsTable({ vaultPDA, vaultSeed, isAdmin, refreshTrigge
               <tr className="text-slate-500 text-xs border-b border-slate-800">
                 <th className="px-6 py-3 text-left font-medium">Pair</th>
                 <th className="px-4 py-3 text-right font-medium">Max %</th>
-                <th className="px-4 py-3 text-right font-medium">Swapped</th>
-                <th className="px-4 py-3 text-right font-medium">Count</th>
+                <th className="px-4 py-3 text-right font-medium">SOL In</th>
+                <th className="px-4 py-3 text-right font-medium">Balance</th>
                 <th className="px-4 py-3 text-right font-medium">Last Swap</th>
-                <th className="px-6 py-3 text-right font-medium">Status</th>
+                <th className="px-4 py-3 text-right font-medium">Status</th>
+                <th className="px-6 py-3 text-right font-medium">Actions</th>
               </tr>
             </thead>
             <tbody>
               {pairs.map((row) => {
                 const lastSwap = row.lastSwappedAt?.toNumber() ?? 0;
                 const lastSwapStr = lastSwap === 0 ? "—" : new Date(lastSwap * 1000).toLocaleDateString();
+                const hasBalance = row.tokenBalance > 0n;
                 return (
                   <tr key={row.symbol} className="border-b border-slate-800/60 hover:bg-slate-800/30 transition-colors">
                     <td className="px-6 py-4">
@@ -130,10 +154,12 @@ export default function PairsTable({ vaultPDA, vaultSeed, isAdmin, refreshTrigge
                       <span className="ml-2 text-slate-500 text-xs">{mintLabel(row.mint.toBase58())}</span>
                     </td>
                     <td className="px-4 py-4 text-right text-slate-300">{(row.maxBps / 100).toFixed(0)}%</td>
-                    <td className="px-4 py-4 text-right text-slate-300">{lamportsToSol(row.totalSwapped?.toNumber() ?? 0)} SOL</td>
-                    <td className="px-4 py-4 text-right text-slate-300">{row.swapCount}</td>
+                    <td className="px-4 py-4 text-right text-slate-300">{lamportsToSol(row.totalSwapped?.toNumber() ?? 0)}</td>
+                    <td className="px-4 py-4 text-right font-mono text-slate-200">
+                      {formatTokenBalance(row.tokenBalance, row.tokenDecimals)}
+                    </td>
                     <td className="px-4 py-4 text-right text-slate-400 text-xs">{lastSwapStr}</td>
-                    <td className="px-6 py-4 text-right">
+                    <td className="px-4 py-4 text-right">
                       {isAdmin ? (
                         <button onClick={() => togglePair(row)} disabled={toggling === row.symbol}
                           className={`text-xs px-2.5 py-1 rounded-full border font-medium transition-colors disabled:opacity-50 ${row.isActive ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/30" : "bg-slate-700/50 text-slate-400 border-slate-600 hover:bg-slate-700"}`}>
@@ -145,12 +171,34 @@ export default function PairsTable({ vaultPDA, vaultSeed, isAdmin, refreshTrigge
                         </span>
                       )}
                     </td>
+                    <td className="px-6 py-4 text-right">
+                      {isAdmin && (
+                        <button
+                          onClick={() => setWithdrawTarget(row)}
+                          disabled={!hasBalance}
+                          title={hasBalance ? `Withdraw ${row.symbol}` : "Belum ada saldo"}
+                          className="text-xs px-2.5 py-1 rounded-lg border bg-emerald-600/15 text-emerald-300 border-emerald-500/30 hover:bg-emerald-600/30 disabled:opacity-30 disabled:cursor-not-allowed transition-colors">
+                          ↓ Withdraw
+                        </button>
+                      )}
+                    </td>
                   </tr>
                 );
               })}
             </tbody>
           </table>
         </div>
+      )}
+
+      {withdrawTarget && (
+        <WithdrawPairModal
+          vaultPDA={vaultPDA}
+          vaultSeed={vaultSeed}
+          mint={withdrawTarget.mint}
+          symbol={withdrawTarget.symbol}
+          onClose={() => setWithdrawTarget(null)}
+          onSuccess={fetchPairs}
+        />
       )}
     </div>
   );

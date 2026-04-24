@@ -22,6 +22,7 @@ custom-panic = []
 
 [dependencies]
 anchor-lang = "1.0.0"
+anchor-spl = { version = "1.0.0", features = ["token"] }
 
 [dev-dependencies]
 litesvm = "0.10.0"
