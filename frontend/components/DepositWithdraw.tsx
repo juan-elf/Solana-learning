@@ -35,12 +35,12 @@ export default function DepositWithdraw({ vaultPDA, vaultSeed, isAdmin, onSucces
       if (tab === "deposit") {
         await program.methods
           .deposit(vaultSeed, new anchor.BN(lamports))
-          .accounts({ vault_state: vaultPDA, user: wallet.publicKey })
+          .accounts({ vaultState: vaultPDA, user: wallet.publicKey })
           .rpc();
       } else {
         await program.methods
           .withdraw(vaultSeed, new anchor.BN(lamports))
-          .accounts({ vault_state: vaultPDA, admin: wallet.publicKey })
+          .accounts({ vaultState: vaultPDA, admin: wallet.publicKey })
           .rpc();
       }
       setAmount("");

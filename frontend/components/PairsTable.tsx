@@ -10,11 +10,11 @@ interface PairRow {
   symbol: string;
   mint: PublicKey;
   pairPDA: PublicKey;
-  is_active: boolean;
-  max_bps: number;
-  total_swapped: anchor.BN;
-  swap_count: number;
-  last_swapped_at: anchor.BN;
+  isActive: boolean;
+  maxBps: number;
+  totalSwapped: anchor.BN;
+  swapCount: number;
+  lastSwappedAt: anchor.BN;
 }
 
 interface Props {
@@ -51,7 +51,7 @@ export default function PairsTable({ vaultPDA, vaultSeed, isAdmin, refreshTrigge
         const pairPDA = getPairPDA(PROGRAM_ID, vaultPDALocal, mintPubkey);
         try {
           const acc = await (program.account as any).pairConfig.fetch(pairPDA);
-          rows.push({ symbol, mint: mintPubkey, pairPDA, is_active: acc.is_active, max_bps: acc.max_bps, total_swapped: acc.total_swapped, swap_count: acc.swap_count, last_swapped_at: acc.last_swapped_at });
+          rows.push({ symbol, mint: mintPubkey, pairPDA, isActive: acc.isActive, maxBps: acc.maxBps, totalSwapped: acc.totalSwapped, swapCount: acc.swapCount, lastSwappedAt: acc.lastSwappedAt });
         } catch { /* pair not registered */ }
       }
       setPairs(rows);
@@ -73,8 +73,8 @@ export default function PairsTable({ vaultPDA, vaultSeed, isAdmin, refreshTrigge
     try {
       const program = getProgram(wallet as unknown as import("@/lib/program").BrowserWallet);
       await program.methods
-        .togglePair(vaultSeed, !row.is_active)
-        .accounts({ vault_state: vaultPDA, target_mint: row.mint, pair_config: row.pairPDA, admin: wallet.publicKey })
+        .togglePair(vaultSeed, !row.isActive)
+        .accounts({ vaultState: vaultPDA, targetMint: row.mint, pairConfig: row.pairPDA, admin: wallet.publicKey })
         .rpc();
       await fetchPairs();
     } catch (e: any) {
@@ -121,7 +121,7 @@ export default function PairsTable({ vaultPDA, vaultSeed, isAdmin, refreshTrigge
             </thead>
             <tbody>
               {pairs.map((row) => {
-                const lastSwap = row.last_swapped_at?.toNumber() ?? 0;
+                const lastSwap = row.lastSwappedAt?.toNumber() ?? 0;
                 const lastSwapStr = lastSwap === 0 ? "—" : new Date(lastSwap * 1000).toLocaleDateString();
                 return (
                   <tr key={row.symbol} className="border-b border-slate-800/60 hover:bg-slate-800/30 transition-colors">
@@ -129,19 +129,19 @@ export default function PairsTable({ vaultPDA, vaultSeed, isAdmin, refreshTrigge
                       <span className="font-semibold text-white">{row.symbol}</span>
                       <span className="ml-2 text-slate-500 text-xs">{mintLabel(row.mint.toBase58())}</span>
                     </td>
-                    <td className="px-4 py-4 text-right text-slate-300">{(row.max_bps / 100).toFixed(0)}%</td>
-                    <td className="px-4 py-4 text-right text-slate-300">{lamportsToSol(row.total_swapped?.toNumber() ?? 0)} SOL</td>
-                    <td className="px-4 py-4 text-right text-slate-300">{row.swap_count}</td>
+                    <td className="px-4 py-4 text-right text-slate-300">{(row.maxBps / 100).toFixed(0)}%</td>
+                    <td className="px-4 py-4 text-right text-slate-300">{lamportsToSol(row.totalSwapped?.toNumber() ?? 0)} SOL</td>
+                    <td className="px-4 py-4 text-right text-slate-300">{row.swapCount}</td>
                     <td className="px-4 py-4 text-right text-slate-400 text-xs">{lastSwapStr}</td>
                     <td className="px-6 py-4 text-right">
                       {isAdmin ? (
                         <button onClick={() => togglePair(row)} disabled={toggling === row.symbol}
-                          className={`text-xs px-2.5 py-1 rounded-full border font-medium transition-colors disabled:opacity-50 ${row.is_active ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/30" : "bg-slate-700/50 text-slate-400 border-slate-600 hover:bg-slate-700"}`}>
-                          {toggling === row.symbol ? "…" : row.is_active ? "● ON" : "○ OFF"}
+                          className={`text-xs px-2.5 py-1 rounded-full border font-medium transition-colors disabled:opacity-50 ${row.isActive ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/30" : "bg-slate-700/50 text-slate-400 border-slate-600 hover:bg-slate-700"}`}>
+                          {toggling === row.symbol ? "…" : row.isActive ? "● ON" : "○ OFF"}
                         </button>
                       ) : (
-                        <span className={`text-xs px-2.5 py-1 rounded-full border font-medium ${row.is_active ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30" : "bg-slate-700/50 text-slate-400 border-slate-600"}`}>
-                          {row.is_active ? "● ON" : "○ OFF"}
+                        <span className={`text-xs px-2.5 py-1 rounded-full border font-medium ${row.isActive ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30" : "bg-slate-700/50 text-slate-400 border-slate-600"}`}>
+                          {row.isActive ? "● ON" : "○ OFF"}
                         </span>
                       )}
                     </td>
