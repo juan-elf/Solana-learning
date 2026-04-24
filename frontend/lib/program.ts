@@ -7,7 +7,7 @@ export const RPC_URL = process.env.NEXT_PUBLIC_RPC_URL ?? clusterApiUrl("devnet"
 
 export const TOKEN_MINTS: Record<string, { mint: string; label: string }> = {
   JUP:  { mint: "JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN", label: "Jupiter" },
-  MET:  { mint: "METADDFL6wWMWEoKDFJwpmV4gVgELib96hYKUaVL5a",  label: "Meteora" },
+  USDC: { mint: "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU", label: "USDC (devnet)" },
   BONK: { mint: "DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263", label: "Bonk" },
   WIF:  { mint: "EKpQGSJtjMFqKZ9KQanSqYXRcF8fBopzLHYxdM65zcjm", label: "dogwifhat" },
 };

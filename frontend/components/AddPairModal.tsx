@@ -25,14 +25,14 @@ export default function AddPairModal({ vaultPDA, vaultSeed, onClose, onSuccess }
     if (isNaN(pct) || pct <= 0 || pct > 100) { setError("Masukkan persentase 1–100"); return; }
     if (!wallet.publicKey || !wallet.signTransaction) return;
 
-    const maxBps = Math.round(pct * 100);
-    const { mint } = TOKEN_MINTS[symbol];
-    const mintPubkey = new PublicKey(mint);
-    const pairPDA = getPairPDA(PROGRAM_ID, vaultPDA, mintPubkey);
-
     setLoading(true);
     setError("");
     try {
+      const maxBps = Math.round(pct * 100);
+      const { mint } = TOKEN_MINTS[symbol];
+      const mintPubkey = new PublicKey(mint);
+      const pairPDA = getPairPDA(PROGRAM_ID, vaultPDA, mintPubkey);
+
       const program = getProgram(wallet as unknown as import("@/lib/program").BrowserWallet);
       await program.methods
         .addPair(vaultSeed, maxBps)
