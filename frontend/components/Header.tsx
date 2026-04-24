@@ -1,8 +1,17 @@
 "use client";
 
-import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
+import { useEffect, useState } from "react";
+import dynamic from "next/dynamic";
+
+const WalletMultiButton = dynamic(
+  async () => (await import("@solana/wallet-adapter-react-ui")).WalletMultiButton,
+  { ssr: false }
+);
 
 export default function Header() {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+
   return (
     <header className="border-b border-slate-800 bg-slate-950/80 backdrop-blur sticky top-0 z-10">
       <div className="max-w-5xl mx-auto px-4 h-16 flex items-center justify-between">
@@ -15,7 +24,11 @@ export default function Header() {
             Devnet
           </span>
         </div>
-        <WalletMultiButton style={{}} />
+        {mounted ? (
+          <WalletMultiButton style={{}} />
+        ) : (
+          <div className="h-11 w-40 rounded-lg bg-slate-800 animate-pulse" />
+        )}
       </div>
     </header>
   );

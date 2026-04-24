@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState } from "react";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { PublicKey } from "@solana/web3.js";
 import * as anchor from "@anchor-lang/core";
@@ -28,29 +28,40 @@ export default function VaultCard({ onVaultLoaded, refreshTrigger }: Props) {
   const [notFound, setNotFound] = useState(false);
   const [loading, setLoading] = useState(false);
   const [initializing, setInitializing] = useState(false);
+  const [reloadTick, setReloadTick] = useState(0);
 
-  const fetchVault = useCallback(async () => {
-    if (!wallet.publicKey || !wallet.signTransaction) return;
-    setLoading(true);
-    setNotFound(false);
-    try {
-      const seed = getVaultSeed(wallet.publicKey);
-      setVaultSeed(seed);
-      const program = getProgram(wallet as unknown as import("@/lib/program").BrowserWallet);
-      const pda = getVaultPDA(PROGRAM_ID, seed);
-      setVaultPDA(pda);
-      const acc = await (program.account as any).vaultState.fetch(pda);
-      setVault(acc);
-      const isAdmin = acc.admin.toBase58() === wallet.publicKey.toBase58();
-      onVaultLoaded(pda, isAdmin, seed);
-    } catch {
-      setNotFound(true);
-    } finally {
-      setLoading(false);
-    }
-  }, [wallet, onVaultLoaded]);
+  const walletKey = wallet.publicKey?.toBase58() ?? "";
+  const canSign = !!wallet.signTransaction;
 
-  useEffect(() => { fetchVault(); }, [fetchVault, refreshTrigger]);
+  useEffect(() => {
+    if (!walletKey || !canSign) return;
+    let cancelled = false;
+    const run = async () => {
+      setLoading(true);
+      setNotFound(false);
+      try {
+        const pubkey = new PublicKey(walletKey);
+        const seed = getVaultSeed(pubkey);
+        const pda = getVaultPDA(PROGRAM_ID, seed);
+        if (cancelled) return;
+        setVaultSeed(seed);
+        setVaultPDA(pda);
+        const program = getProgram(wallet as unknown as import("@/lib/program").BrowserWallet);
+        const acc = await (program.account as any).vaultState.fetch(pda);
+        if (cancelled) return;
+        setVault(acc);
+        const isAdmin = acc.admin.toBase58() === walletKey;
+        onVaultLoaded(pda, isAdmin, seed);
+      } catch {
+        if (!cancelled) setNotFound(true);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+    run();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [walletKey, canSign, refreshTrigger, reloadTick]);
 
   const initializeVault = async () => {
     if (!wallet.publicKey || !wallet.signTransaction) return;
@@ -63,7 +74,7 @@ export default function VaultCard({ onVaultLoaded, refreshTrigger }: Props) {
         .initialize(seed)
         .accounts({ vaultState: pda, user: wallet.publicKey })
         .rpc();
-      await fetchVault();
+      setReloadTick((n) => n + 1);
     } catch (e: any) {
       let msg = e.message ?? "Unknown error";
       if (typeof e.getLogs === "function") {

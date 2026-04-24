@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { PublicKey } from "@solana/web3.js";
 import * as anchor from "@anchor-lang/core";
@@ -31,27 +31,41 @@ export default function PairsTable({ vaultPDA, vaultSeed, isAdmin, refreshTrigge
   const [loading, setLoading] = useState(false);
   const [toggling, setToggling] = useState<string | null>(null);
 
+  const walletRef = useRef(wallet);
+  walletRef.current = wallet;
+
+  const vaultKey = vaultPDA?.toBase58() ?? "";
+  const walletKey = wallet.publicKey?.toBase58() ?? "";
+  const canSign = !!wallet.signTransaction;
+
   const fetchPairs = useCallback(async () => {
-    if (!wallet.publicKey || !wallet.signTransaction || !vaultPDA) return;
+    const w = walletRef.current;
+    if (!w.publicKey || !w.signTransaction || !vaultKey) return;
+    const vaultPDALocal = new PublicKey(vaultKey);
     setLoading(true);
     try {
-      const program = getProgram(wallet as unknown as import("@/lib/program").BrowserWallet);
+      const program = getProgram(w as unknown as import("@/lib/program").BrowserWallet);
       const rows: PairRow[] = [];
       for (const [symbol, { mint }] of Object.entries(TOKEN_MINTS)) {
         const mintPubkey = new PublicKey(mint);
-        const pairPDA = getPairPDA(PROGRAM_ID, vaultPDA, mintPubkey);
+        const pairPDA = getPairPDA(PROGRAM_ID, vaultPDALocal, mintPubkey);
         try {
           const acc = await (program.account as any).pairConfig.fetch(pairPDA);
           rows.push({ symbol, mint: mintPubkey, pairPDA, is_active: acc.is_active, max_bps: acc.max_bps, total_swapped: acc.total_swapped, swap_count: acc.swap_count, last_swapped_at: acc.last_swapped_at });
         } catch { /* pair not registered */ }
       }
       setPairs(rows);
+    } catch (e) {
+      console.error("[PairsTable] fetch failed:", e);
     } finally {
       setLoading(false);
     }
-  }, [wallet, vaultPDA]);
+  }, [vaultKey]);
 
-  useEffect(() => { fetchPairs(); }, [fetchPairs, refreshTrigger]);
+  useEffect(() => {
+    if (!walletKey || !canSign || !vaultKey) return;
+    fetchPairs();
+  }, [walletKey, canSign, vaultKey, refreshTrigger, fetchPairs]);
 
   const togglePair = async (row: PairRow) => {
     if (!wallet.publicKey || !wallet.signTransaction || !vaultPDA || !vaultSeed) return;

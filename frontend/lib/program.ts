@@ -29,6 +29,9 @@ export interface BrowserWallet {
 }
 
 export function getProgram(wallet: BrowserWallet) {
+  if (!wallet || !wallet.publicKey || !wallet.signTransaction) {
+    throw new Error("Wallet not ready: publicKey or signTransaction missing");
+  }
   const connection = new Connection(RPC_URL, "confirmed");
   const provider = new anchor.AnchorProvider(
     connection,
