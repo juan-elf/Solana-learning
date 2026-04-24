@@ -135,7 +135,7 @@ export default function VaultCard({ onVaultLoaded, refreshTrigger }: Props) {
       <div>
         <p className="text-slate-500 text-xs mb-1">Balance</p>
         <p className="text-3xl font-bold text-white">
-          {lamportsToSol(vault.total_funds.toNumber())}
+          {lamportsToSol(vault.total_funds?.toNumber() ?? 0)}
           <span className="text-lg text-slate-400 ml-1">SOL</span>
         </p>
       </div>

@@ -121,7 +121,7 @@ export default function PairsTable({ vaultPDA, vaultSeed, isAdmin, refreshTrigge
             </thead>
             <tbody>
               {pairs.map((row) => {
-                const lastSwap = row.last_swapped_at.toNumber();
+                const lastSwap = row.last_swapped_at?.toNumber() ?? 0;
                 const lastSwapStr = lastSwap === 0 ? "—" : new Date(lastSwap * 1000).toLocaleDateString();
                 return (
                   <tr key={row.symbol} className="border-b border-slate-800/60 hover:bg-slate-800/30 transition-colors">
@@ -130,7 +130,7 @@ export default function PairsTable({ vaultPDA, vaultSeed, isAdmin, refreshTrigge
                       <span className="ml-2 text-slate-500 text-xs">{mintLabel(row.mint.toBase58())}</span>
                     </td>
                     <td className="px-4 py-4 text-right text-slate-300">{(row.max_bps / 100).toFixed(0)}%</td>
-                    <td className="px-4 py-4 text-right text-slate-300">{lamportsToSol(row.total_swapped.toNumber())} SOL</td>
+                    <td className="px-4 py-4 text-right text-slate-300">{lamportsToSol(row.total_swapped?.toNumber() ?? 0)} SOL</td>
                     <td className="px-4 py-4 text-right text-slate-300">{row.swap_count}</td>
                     <td className="px-4 py-4 text-right text-slate-400 text-xs">{lastSwapStr}</td>
                     <td className="px-6 py-4 text-right">
