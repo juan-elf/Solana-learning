@@ -26,6 +26,8 @@ pub use instructions::toggle_pair::*;
 pub use instructions::execute_swap::*;
 #[allow(ambiguous_glob_reexports)]
 pub use instructions::withdraw_pair_tokens::*;
+#[allow(ambiguous_glob_reexports)]
+pub use instructions::set_vault_active::*;
 
 declare_id!("FtUGETcAzSFmdjf6gzZKwBYKqp7CoYjykiw8gQ4ZgsjX");
 
@@ -61,9 +63,10 @@ pub mod my_solana_project {
         vault_seed: String,
         swap_data: Vec<u8>,
         amount_in: u64,
+        expected_out: u64,
         min_amount_out: u64,
     ) -> Result<()> {
-        instructions::execute_swap::handler(ctx, vault_seed, swap_data, amount_in, min_amount_out)
+        instructions::execute_swap::handler(ctx, vault_seed, swap_data, amount_in, expected_out, min_amount_out)
     }
 
     // --- DCA result withdrawal (SPL token) ---
@@ -73,6 +76,15 @@ pub mod my_solana_project {
         amount: u64,
     ) -> Result<()> {
         instructions::withdraw_pair_tokens::handler(ctx, vault_seed, amount)
+    }
+
+    // --- Admin pause/resume ---
+    pub fn set_vault_active(
+        ctx: Context<SetVaultActive>,
+        vault_seed: String,
+        active: bool,
+    ) -> Result<()> {
+        instructions::set_vault_active::handler(ctx, vault_seed, active)
     }
 
     // --- Read-only / utilities ---

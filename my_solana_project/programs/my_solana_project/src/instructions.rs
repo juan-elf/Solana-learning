@@ -7,6 +7,7 @@ pub mod add_pair;
 pub mod toggle_pair;
 pub mod execute_swap;
 pub mod withdraw_pair_tokens;
+pub mod set_vault_active;
 
 #[allow(ambiguous_glob_reexports)]
 pub use initialize::*;
@@ -22,3 +23,5 @@ pub use toggle_pair::*;
 pub use execute_swap::*;
 #[allow(ambiguous_glob_reexports)]
 pub use withdraw_pair_tokens::*;
+#[allow(ambiguous_glob_reexports)]
+pub use set_vault_active::*;

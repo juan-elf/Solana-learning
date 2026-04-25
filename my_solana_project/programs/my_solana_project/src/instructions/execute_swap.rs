@@ -40,19 +40,39 @@ pub struct ExecuteSwap<'info> {
 
 /// `swap_data`     : instruction data dari Jupiter (hasil /v6/swap, field `swapInstruction.data`)
 /// `amount_in`     : SOL yang akan di-swap dari vault (lamports)
-/// `min_amount_out`: minimum token output setelah slippage (dari Jupiter quote `otherAmountThreshold`)
+/// `expected_out`  : output yang diharapkan dari Jupiter quote (`outAmount`)
+/// `min_amount_out`: minimum token output yang acceptable (`otherAmountThreshold`).
+///                   Selisih (expected_out - min_amount_out) / expected_out adalah slippage
+///                   tolerance yang dipilih bot, dan harus <= vault.max_slippage_bps.
 pub fn handler(
     ctx: Context<ExecuteSwap>,
     vault_seed: String,
     swap_data: Vec<u8>,
     amount_in: u64,
+    expected_out: u64,
     min_amount_out: u64,
 ) -> Result<()> {
     // 1. Validasi amount
     require!(amount_in > 0, MyError::InvalidAmount);
     require!(min_amount_out > 0, MyError::InvalidAmount);
+    require!(expected_out >= min_amount_out, MyError::InvalidAmount);
 
-    // 2. Pastikan amount tidak melebihi max_bps alokasi vault
+    // 2. Enforce vault-wide slippage cap on-chain
+    //    slippage_bps_used = (expected_out - min_amount_out) * 10000 / expected_out
+    let slippage_bps_used = (expected_out as u128)
+        .checked_sub(min_amount_out as u128)
+        .ok_or(error!(MyError::ArithmeticOverflow))?
+        .checked_mul(10_000)
+        .ok_or(error!(MyError::ArithmeticOverflow))?
+        .checked_div(expected_out as u128)
+        .ok_or(error!(MyError::ArithmeticOverflow))? as u64;
+
+    require!(
+        slippage_bps_used <= ctx.accounts.vault_state.max_slippage_bps as u64,
+        MyError::SlippageExceeded
+    );
+
+    // 3. Pastikan amount tidak melebihi max_bps alokasi vault
     let vault_funds = ctx.accounts.vault_state.total_funds;
     let max_allowed = (vault_funds as u128)
         .checked_mul(ctx.accounts.pair_config.max_bps as u128)
@@ -119,11 +139,12 @@ pub fn handler(
     pair_config.last_swapped_at = Clock::get()?.unix_timestamp;
 
     msg!(
-        "Swap executed | amount_in: {} lamports | min_out: {} | pair swap #{} | total_swapped: {}",
+        "Swap executed | amount_in: {} | expected_out: {} | min_out: {} | slippage_bps: {} | swap #{}",
         amount_in,
+        expected_out,
         min_amount_out,
-        pair_config.swap_count,
-        pair_config.total_swapped
+        slippage_bps_used,
+        pair_config.swap_count
     );
 
     Ok(())

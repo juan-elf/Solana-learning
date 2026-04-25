@@ -28,6 +28,7 @@ export default function VaultCard({ onVaultLoaded, refreshTrigger }: Props) {
   const [notFound, setNotFound] = useState(false);
   const [loading, setLoading] = useState(false);
   const [initializing, setInitializing] = useState(false);
+  const [togglingActive, setTogglingActive] = useState(false);
   const [reloadTick, setReloadTick] = useState(0);
 
   const walletKey = wallet.publicKey?.toBase58() ?? "";
@@ -92,6 +93,27 @@ export default function VaultCard({ onVaultLoaded, refreshTrigger }: Props) {
     }
   };
 
+  const setActive = async (active: boolean) => {
+    if (!wallet.publicKey || !wallet.signTransaction || !vaultPDA || !vaultSeed) return;
+    setTogglingActive(true);
+    try {
+      const program = getProgram(wallet as unknown as import("@/lib/program").BrowserWallet);
+      await program.methods
+        .setVaultActive(vaultSeed, active)
+        .accounts({ vaultState: vaultPDA, admin: wallet.publicKey })
+        .rpc();
+      setReloadTick((n) => n + 1);
+    } catch (e: any) {
+      if (isAlreadyProcessedError(e)) {
+        setReloadTick((n) => n + 1);
+        return;
+      }
+      alert(`Set vault active=${active} failed:\n\n` + (e.message ?? "unknown"));
+    } finally {
+      setTogglingActive(false);
+    }
+  };
+
   if (!wallet.connected) {
     return (
       <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6 flex flex-col items-center justify-center gap-3 min-h-[140px]">
@@ -126,14 +148,29 @@ export default function VaultCard({ onVaultLoaded, refreshTrigger }: Props) {
   }
 
   if (!vault || !vaultPDA) return null;
+  const isAdmin = vault.admin.toBase58() === walletKey;
+  const badgeClass = vault.isActive
+    ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/30"
+    : "bg-red-500/15 text-red-400 border border-red-500/30";
 
   return (
     <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6 space-y-4">
       <div className="flex items-center justify-between">
         <h2 className="text-slate-300 text-sm font-medium uppercase tracking-wider">Vault</h2>
-        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${vault.isActive ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/30" : "bg-red-500/15 text-red-400 border border-red-500/30"}`}>
-          {vault.isActive ? "Active" : "Paused"}
-        </span>
+        {isAdmin ? (
+          <button
+            onClick={() => setActive(!vault.isActive)}
+            disabled={togglingActive}
+            title={vault.isActive ? "Click to pause" : "Click to resume"}
+            className={`text-xs px-2.5 py-0.5 rounded-full font-medium transition-colors disabled:opacity-50 ${badgeClass} hover:brightness-125`}
+          >
+            {togglingActive ? "…" : vault.isActive ? "● Active" : "○ Paused"}
+          </button>
+        ) : (
+          <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${badgeClass}`}>
+            {vault.isActive ? "Active" : "Paused"}
+          </span>
+        )}
       </div>
 
       <div>

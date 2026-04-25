@@ -254,6 +254,10 @@ export const IDL = {
           "type": "u64"
         },
         {
+          "name": "expected_out",
+          "type": "u64"
+        },
+        {
           "name": "min_amount_out",
           "type": "u64"
         }
@@ -333,6 +337,60 @@ export const IDL = {
         }
       ],
       "args": []
+    },
+    {
+      "name": "set_vault_active",
+      "discriminator": [
+        191,
+        167,
+        28,
+        251,
+        174,
+        123,
+        25,
+        113
+      ],
+      "accounts": [
+        {
+          "name": "vault_state",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "vault_seed"
+              }
+            ]
+          }
+        },
+        {
+          "name": "admin",
+          "signer": true,
+          "relations": [
+            "vault_state"
+          ]
+        }
+      ],
+      "args": [
+        {
+          "name": "vault_seed",
+          "type": "string"
+        },
+        {
+          "name": "active",
+          "type": "bool"
+        }
+      ]
     },
     {
       "name": "swap",
