@@ -172,6 +172,58 @@ Setelah deploy ke Vercel, vault muncul "Paused", balance 0.0000 SOL, Max Slippag
 - Akun on-chain yang tidak bisa dihapus tetap jadi bagian permanen state — kalau struct layout berubah, pertimbangkan instruksi `migrate`/`realloc` dari awal, atau seed versioning.
 - `new PublicKey(...)` di luar try block = bom silent. Bungkus semua user-derived input parsing dalam try/catch.
 
+#### Sesi 5 — DCA Withdraw Feature (target token → admin)
+
+User minta cara untuk ambil hasil DCA — token yang sudah ter-swap (JUP/USDC/BONK/WIF) menumpuk di ATA milik vault PDA tapi belum ada jalur keluar. Pilihan:
+
+- **Opsi A** — withdraw langsung token ke admin (SPL transfer)
+- **Opsi B** — swap balik ke SOL via Jupiter, lalu withdraw
+
+Opsi B butuh Jupiter CPI yang **tidak jalan di devnet**, jadi pilih Opsi A dulu (testable di devnet, no slippage). Opsi B disisakan sebagai placeholder untuk mainnet.
+
+**Instruksi baru — `withdraw_pair_tokens(vault_seed, amount)`**
+- File: `instructions/withdraw_pair_tokens.rs`
+- Accounts: `vault_state` (has_one = admin), `target_mint` (Mint), `pair_config` (validasi seed), `vault_token_account` (TokenAccount, authority = vault_state), `admin_token_account`, `admin` (signer), `token_program`
+- Handler: `token::transfer` CPI dengan `CpiContext::new_with_signer` — vault PDA sign sebagai authority, seeds `[b"vault", vault_seed, bump]`
+- Validasi: `amount > 0` + `vault_token_account.amount >= amount`
+
+**Cargo.toml — anchor-spl + idl-build cascade**
+- Tambah `anchor-spl = { version = "1.0.0", features = ["token"] }`
+- **Trap**: `idl-build = ["anchor-lang/idl-build"]` saja tidak cukup. Saat `anchor build` enable feature `idl-build`, struct `Mint` & `TokenAccount` dari anchor-spl butuh trait `create_type`/`DISCRIMINATOR`/`insert_types` yang cuma muncul kalau anchor-spl punya `idl-build` aktif juga. Fix di commit `fbfcf17`: cascade ke `["anchor-lang/idl-build", "anchor-spl/idl-build"]`.
+- Trap kedua: `CpiContext::new_with_signer` di Anchor v1 expect `Pubkey` bukan `AccountInfo` (sama dengan `CpiContext::new` di deposit.rs). Fix: `Token::id()` instead of `token_program.to_account_info()`.
+
+**Frontend — `WithdrawPairModal` + Balance/Actions columns**
+- `lib/program.ts`: helper `getVaultAta()` (allowOwnerOffCurve=true, vault PDA tidak on-curve), `getUserAta()`
+- `WithdrawPairModal.tsx`: fetch ATA balance + mint decimals via `@solana/spl-token`, tombol Max, prepend `createAssociatedTokenAccountIdempotentInstruction` untuk admin ATA (no-op kalau sudah ada), call `.withdrawPairTokens()`
+- `PairsTable.tsx`: kolom baru **Balance** (raw → human via `decimals`) dan **Actions** dengan tombol **↓ Withdraw** (admin-only, disabled saat `tokenBalance === 0n`)
+- `tsconfig.json`: bump target ES2017 → ES2020 (perlu untuk BigInt literal `0n`)
+
+**Devnet redeploy — extend ProgramData dulu**
+- `cargo check` lokal sukses, tapi `anchor deploy` fail: `account data too small for instruction; ProgramData account not large enough`.
+- Sebab: program lama 260,864 bytes deployed dengan ProgramData yang persis pas. Binary baru dengan anchor-spl jadi **286,576 bytes** (+25.7KB).
+- Fix: `solana program extend FtUGETcAzSFmdjf6gzZKwBYKqp7CoYjykiw8gQ4ZgsjX 30000 -u devnet` (cost ~0.21 SOL untuk rent-exempt reserve, 0.00000696 SOL/byte). Setelah extend, `anchor deploy` sukses di slot ~457432637.
+- IDL yang ada di frontend di-overwrite dari `target/idl/my_solana_project.json` hasil `anchor build` (commit `cdde932`) — discriminator `withdraw_pair_tokens`: `[229,233,203,235,84,73,70,225]`.
+
+**End-to-end smoke test (CLI, commit `frontend/test-withdraw-pair.mjs`)**
+- Skrip pakai keypair CLI `D2NYszYS...` sebagai admin (vault baru di seed `vault_D2NYszYS`)
+- Buat fresh SPL mint 6 desimal → register pair (max 50%) → mint 100 token ke vault ATA → call `withdrawPairTokens(60_000_000)` → verifikasi
+- Hasil: vault ATA `100M → 40M`, admin ATA `0 → 60M`. **PASS**. Tx: `5r7SR3W4...`
+
+**Test UI di Phantom vault**
+- `D2NYszYS` (CLI) bukan admin vault Phantom (`6RcMW8s...`, admin `4GYyLGYg...`), jadi `add_pair` harus dari UI dulu.
+- Tambah TEST mint `3GVkwedvppx6MjnC7JmupwGFCbsE8fxz4iNvSmF7ZS1f` ke `TOKEN_MINTS` (commit `12c0e07`) supaya muncul di dropdown Add Pair.
+- Setelah user add pair via UI, jalankan `mint-to-phantom-vault.mjs` — mint 100 TEST ke vault ATA Phantom (`6X4gj7Q2MPwFzkX2CU1jaoa2HG9QReZt3vqZEWHgEpiC`). Tombol Withdraw di UI aktif, withdraw via Phantom sukses.
+
+**Bug fix bonus: "Transaction has already been processed" toast palsu (commit `448d3c6`)**
+- Setelah deposit sukses, kadang muncul error toast "Simulation failed... already been processed" — padahal SOL benar-benar masuk ke vault.
+- Akar masalah: `@anchor-lang/core` `provider.js:262` — `sendAndConfirmRawTransaction` loop on `TimeoutError` dengan `continue` yang **re-send raw tx yang sama**. First send sukses landed, retry-send gagal preflight karena tx sudah on-chain.
+- Fix: helper `isAlreadyProcessedError(e)` di `lib/program.ts` (deteksi substring `"already been processed"` / `"already processed"`). Diaplikasikan ke catch block di semua component yang fire tx via `.rpc()`: `VaultCard.initializeVault`, `DepositWithdraw`, `AddPairModal`, `PairsTable.togglePair`, `WithdrawPairModal`. Treat as success (refresh + close modal) instead of error toast.
+
+**Lesson learned**
+- Anchor v1 `idl-build` feature **harus di-cascade manual** ke setiap dependency yang punya tipe yang dipakai di `#[derive(Accounts)]`. Tanpa cascade, pesan error compile-nya membingungkan ("no associated item DISCRIMINATOR").
+- Setiap perubahan struct/instruksi yang bikin binary lebih besar = wajib cek `solana program show` size-nya, kalau perlu `solana program extend` sebelum redeploy. Cost ~0.00000696 SOL/byte rent reserve.
+- `provider.sendAndConfirm` di SDK Anchor v1 punya bug retry loop yang membuat tx sukses kelihatan failed di UI. Helper deteksi error string adalah workaround paling murah; fix sungguhnya butuh manual `transaction()` + `sendRawTransaction({ maxRetries: 0 })` + polling status.
+
 ### 4. Testing & Deployment
 - **Local Tests**: Wrote comprehensive TypeScript tests in `tests/vault_test.ts`.
 - **Deployment**: Successfully deployed to Solana Devnet after resolving airdrop rate limits via web faucets.
@@ -212,5 +264,8 @@ Setelah deploy ke Vercel, vault muncul "Paused", balance 0.0000 SOL, Max Slippag
 - [x] 4/4 integration tests passing di devnet
 - [x] Frontend web (Next.js 16 + wallet connect) — selesai, siap Vercel
 - [x] Deployed ke Vercel + live debug (camelCase IDL, invalid MET mint, Buffer polyfill, SSR hydration, per-wallet seed)
+- [x] DCA withdraw (Opsi A): `withdraw_pair_tokens` instruksi + WithdrawPairModal UI — verified end-to-end di devnet (test mint, CLI smoke + Phantom UI)
+- [x] Workaround "already processed" retry-loop bug di Anchor v1 SDK
+- [ ] DCA withdraw (Opsi B): swap-back ke SOL via Jupiter (mainnet only)
 - [ ] LiteSVM unit tests (Rust)
 - [ ] Meteora DLMM integration (Phase 2)
