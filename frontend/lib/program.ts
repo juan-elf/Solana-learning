@@ -11,6 +11,7 @@ export const TOKEN_MINTS: Record<string, { mint: string; label: string }> = {
   USDC: { mint: "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU", label: "USDC (devnet)" },
   BONK: { mint: "DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263", label: "Bonk" },
   WIF:  { mint: "EKpQGSJtjMFqKZ9KQanSqYXRcF8fBopzLHYxdM65zcjm", label: "dogwifhat" },
+  TEST: { mint: "3GVkwedvppx6MjnC7JmupwGFCbsE8fxz4iNvSmF7ZS1f", label: "Test token (devnet)" },
 };
 
 // Derive vault seed otomatis dari wallet pubkey — setiap wallet punya vault sendiri
