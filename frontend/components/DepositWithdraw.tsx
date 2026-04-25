@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { PublicKey, LAMPORTS_PER_SOL } from "@solana/web3.js";
 import * as anchor from "@anchor-lang/core";
-import { getProgram } from "@/lib/program";
+import { getProgram, isAlreadyProcessedError } from "@/lib/program";
 
 interface Props {
   vaultPDA: PublicKey | null;
@@ -46,7 +46,12 @@ export default function DepositWithdraw({ vaultPDA, vaultSeed, isAdmin, onSucces
       setAmount("");
       onSuccess();
     } catch (e: any) {
-      setError(e.message ?? "Transaction failed");
+      if (isAlreadyProcessedError(e)) {
+        setAmount("");
+        onSuccess();
+      } else {
+        setError(e.message ?? "Transaction failed");
+      }
     } finally {
       setLoading(false);
     }

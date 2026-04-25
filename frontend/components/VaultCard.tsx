@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { PublicKey } from "@solana/web3.js";
 import * as anchor from "@anchor-lang/core";
-import { getProgram, getVaultPDA, getVaultSeed, lamportsToSol, PROGRAM_ID } from "@/lib/program";
+import { getProgram, getVaultPDA, getVaultSeed, isAlreadyProcessedError, lamportsToSol, PROGRAM_ID } from "@/lib/program";
 
 interface VaultState {
   admin: PublicKey;
@@ -76,6 +76,10 @@ export default function VaultCard({ onVaultLoaded, refreshTrigger }: Props) {
         .rpc();
       setReloadTick((n) => n + 1);
     } catch (e: any) {
+      if (isAlreadyProcessedError(e)) {
+        setReloadTick((n) => n + 1);
+        return;
+      }
       let msg = e.message ?? "Unknown error";
       if (typeof e.getLogs === "function") {
         try { const logs = await e.getLogs(); msg = logs.join("\n"); } catch {}

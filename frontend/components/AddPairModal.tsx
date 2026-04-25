@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { PublicKey } from "@solana/web3.js";
 import * as anchor from "@anchor-lang/core";
-import { getProgram, getPairPDA, PROGRAM_ID, TOKEN_MINTS } from "@/lib/program";
+import { getProgram, getPairPDA, isAlreadyProcessedError, PROGRAM_ID, TOKEN_MINTS } from "@/lib/program";
 
 interface Props {
   vaultPDA: PublicKey;
@@ -44,6 +44,9 @@ export default function AddPairModal({ vaultPDA, vaultSeed, onClose, onSuccess }
       const msg: string = e.message ?? "Transaction failed";
       if (msg.includes("0x0") || msg.includes("already in use")) {
         setError("Pair ini sudah terdaftar di vault.");
+        onSuccess();
+        onClose();
+      } else if (isAlreadyProcessedError(e)) {
         onSuccess();
         onClose();
       } else {

@@ -5,7 +5,7 @@ import { useWallet } from "@solana/wallet-adapter-react";
 import { PublicKey, Transaction, Connection } from "@solana/web3.js";
 import { createAssociatedTokenAccountIdempotentInstruction, getMint, getAccount } from "@solana/spl-token";
 import * as anchor from "@anchor-lang/core";
-import { getProgram, getVaultAta, getUserAta, getPairPDA, mintLabel, RPC_URL, PROGRAM_ID, TOKEN_PROGRAM_ID } from "@/lib/program";
+import { getProgram, getVaultAta, getUserAta, getPairPDA, isAlreadyProcessedError, mintLabel, RPC_URL, PROGRAM_ID, TOKEN_PROGRAM_ID } from "@/lib/program";
 
 interface Props {
   vaultPDA: PublicKey;
@@ -99,6 +99,11 @@ export default function WithdrawPairModal({ vaultPDA, vaultSeed, mint, symbol, o
       onSuccess();
       onClose();
     } catch (e: any) {
+      if (isAlreadyProcessedError(e)) {
+        onSuccess();
+        onClose();
+        return;
+      }
       let msg = e.message ?? "Transaction failed";
       if (typeof e.getLogs === "function") {
         try { const logs = await e.getLogs(); msg = logs.join("\n"); } catch {}

@@ -5,7 +5,7 @@ import { useWallet } from "@solana/wallet-adapter-react";
 import { PublicKey, Connection } from "@solana/web3.js";
 import { getAccount, getMint } from "@solana/spl-token";
 import * as anchor from "@anchor-lang/core";
-import { getProgram, getPairPDA, getVaultAta, mintLabel, lamportsToSol, RPC_URL, PROGRAM_ID, TOKEN_MINTS } from "@/lib/program";
+import { getProgram, getPairPDA, getVaultAta, isAlreadyProcessedError, mintLabel, lamportsToSol, RPC_URL, PROGRAM_ID, TOKEN_MINTS } from "@/lib/program";
 import WithdrawPairModal from "./WithdrawPairModal";
 
 interface PairRow {
@@ -94,7 +94,11 @@ export default function PairsTable({ vaultPDA, vaultSeed, isAdmin, refreshTrigge
         .rpc();
       await fetchPairs();
     } catch (e: any) {
-      alert("Toggle failed: " + e.message);
+      if (isAlreadyProcessedError(e)) {
+        await fetchPairs();
+      } else {
+        alert("Toggle failed: " + e.message);
+      }
     } finally {
       setToggling(null);
     }

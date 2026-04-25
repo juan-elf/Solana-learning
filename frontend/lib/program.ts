@@ -63,6 +63,14 @@ export function lamportsToSol(lamports: number): string {
   return (lamports / 1e9).toFixed(4);
 }
 
+// @anchor-lang/core's sendAndConfirmRawTransaction retries the raw send when
+// confirmTransaction times out. The retry hits "already processed" because the
+// first send actually landed on-chain. Treat that specific message as success.
+export function isAlreadyProcessedError(e: unknown): boolean {
+  const msg = (e as { message?: string })?.message ?? String(e);
+  return msg.includes("already been processed") || msg.includes("already processed");
+}
+
 // ATA owned by the vault PDA — where DCA-swapped tokens accumulate.
 // `allowOwnerOffCurve = true` because vault PDA is not on the ed25519 curve.
 export function getVaultAta(vaultPDA: PublicKey, mint: PublicKey): PublicKey {
