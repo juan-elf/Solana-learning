@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { PublicKey } from "@solana/web3.js";
 import * as anchor from "@anchor-lang/core";
-import { getProgram, getVaultPDA, getVaultSeed, isAlreadyProcessedError, lamportsToSol, PROGRAM_ID } from "@/lib/program";
+import { getProgram, getVaultPDA, getVaultSeed, isAlreadyProcessedError, lamportsToSol, sendTx, PROGRAM_ID } from "@/lib/program";
 
 interface VaultState {
   admin: PublicKey;
@@ -69,12 +69,14 @@ export default function VaultCard({ onVaultLoaded, refreshTrigger }: Props) {
     setInitializing(true);
     try {
       const seed = getVaultSeed(wallet.publicKey);
-      const program = getProgram(wallet as unknown as import("@/lib/program").BrowserWallet);
+      const browserWallet = wallet as unknown as import("@/lib/program").BrowserWallet;
+      const program = getProgram(browserWallet);
       const pda = getVaultPDA(PROGRAM_ID, seed);
-      await program.methods
-        .initialize(seed)
-        .accounts({ vaultState: pda, user: wallet.publicKey })
-        .rpc();
+      const result = await sendTx(
+        program.methods.initialize(seed).accounts({ vaultState: pda, user: wallet.publicKey }),
+        browserWallet,
+      );
+      console.log("[initialize] confirmed:", result.explorer);
       setReloadTick((n) => n + 1);
     } catch (e: any) {
       if (isAlreadyProcessedError(e)) {
@@ -97,11 +99,13 @@ export default function VaultCard({ onVaultLoaded, refreshTrigger }: Props) {
     if (!wallet.publicKey || !wallet.signTransaction || !vaultPDA || !vaultSeed) return;
     setTogglingActive(true);
     try {
-      const program = getProgram(wallet as unknown as import("@/lib/program").BrowserWallet);
-      await program.methods
-        .setVaultActive(vaultSeed, active)
-        .accounts({ vaultState: vaultPDA, admin: wallet.publicKey })
-        .rpc();
+      const browserWallet = wallet as unknown as import("@/lib/program").BrowserWallet;
+      const program = getProgram(browserWallet);
+      const result = await sendTx(
+        program.methods.setVaultActive(vaultSeed, active).accounts({ vaultState: vaultPDA, admin: wallet.publicKey }),
+        browserWallet,
+      );
+      console.log(`[setVaultActive=${active}] confirmed:`, result.explorer);
       setReloadTick((n) => n + 1);
     } catch (e: any) {
       if (isAlreadyProcessedError(e)) {

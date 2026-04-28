@@ -5,7 +5,7 @@ import { useWallet } from "@solana/wallet-adapter-react";
 import { PublicKey, Connection } from "@solana/web3.js";
 import { getAccount, getMint } from "@solana/spl-token";
 import * as anchor from "@anchor-lang/core";
-import { getProgram, getPairPDA, getVaultAta, isAlreadyProcessedError, mintLabel, lamportsToSol, RPC_URL, PROGRAM_ID, TOKEN_MINTS } from "@/lib/program";
+import { getProgram, getPairPDA, getVaultAta, isAlreadyProcessedError, mintLabel, lamportsToSol, sendTx, RPC_URL, PROGRAM_ID, TOKEN_MINTS } from "@/lib/program";
 import WithdrawPairModal from "./WithdrawPairModal";
 
 interface PairRow {
@@ -87,11 +87,14 @@ export default function PairsTable({ vaultPDA, vaultSeed, isAdmin, refreshTrigge
     if (!wallet.publicKey || !wallet.signTransaction || !vaultPDA || !vaultSeed) return;
     setToggling(row.symbol);
     try {
-      const program = getProgram(wallet as unknown as import("@/lib/program").BrowserWallet);
-      await program.methods
-        .togglePair(vaultSeed, !row.isActive)
-        .accounts({ vaultState: vaultPDA, targetMint: row.mint, pairConfig: row.pairPDA, admin: wallet.publicKey })
-        .rpc();
+      const browserWallet = wallet as unknown as import("@/lib/program").BrowserWallet;
+      const program = getProgram(browserWallet);
+      const result = await sendTx(
+        program.methods.togglePair(vaultSeed, !row.isActive)
+          .accounts({ vaultState: vaultPDA, targetMint: row.mint, pairConfig: row.pairPDA, admin: wallet.publicKey }),
+        browserWallet,
+      );
+      console.log(`[togglePair ${row.symbol}=${!row.isActive}] confirmed:`, result.explorer);
       await fetchPairs();
     } catch (e: any) {
       if (isAlreadyProcessedError(e)) {

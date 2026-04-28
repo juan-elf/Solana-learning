@@ -83,3 +83,76 @@ export function getUserAta(owner: PublicKey, mint: PublicKey): PublicKey {
 }
 
 export { TOKEN_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID };
+
+// MethodsBuilder is the chainable object returned by program.methods.X(...). We
+// only need .transaction() from it; type it loose to avoid pulling internal
+// generics from @anchor-lang/core.
+type AnchorMethodsBuilder = { transaction(): Promise<Transaction> };
+
+export interface SendTxOk {
+  signature: string;
+  explorer: string;
+}
+
+/**
+ * Build, sign, send, and poll a transaction without falling into
+ * @anchor-lang/core's sendAndConfirmRawTransaction retry loop.
+ *
+ * - skipPreflight: false so on-chain errors fail fast at simulation time
+ * - maxRetries: 0 so a confirm timeout never resends the same raw tx
+ * - Polls getSignatureStatuses every second up to 60s, then gives up
+ *
+ * Throws with logs included whenever possible so the caller can surface the
+ * real Anchor error message.
+ */
+export async function sendTx(
+  builder: AnchorMethodsBuilder,
+  wallet: BrowserWallet,
+): Promise<SendTxOk> {
+  const connection = new Connection(RPC_URL, "confirmed");
+  const tx = await builder.transaction();
+  const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash("confirmed");
+  tx.recentBlockhash = blockhash;
+  tx.feePayer = wallet.publicKey;
+
+  const signed = await wallet.signTransaction(tx);
+  const raw = signed.serialize();
+
+  const signature = await connection.sendRawTransaction(raw, {
+    skipPreflight: false,
+    maxRetries: 0,
+  });
+
+  const startTime = Date.now();
+  while (Date.now() - startTime < 60_000) {
+    const { value } = await connection.getSignatureStatuses([signature]);
+    const status = value[0];
+    if (status?.err) {
+      let detail = JSON.stringify(status.err);
+      try {
+        const parsed = await connection.getTransaction(signature, {
+          commitment: "confirmed",
+          maxSupportedTransactionVersion: 0,
+        });
+        if (parsed?.meta?.logMessages) detail = parsed.meta.logMessages.join("\n");
+      } catch { /* ignore */ }
+      const err = new Error(`Transaction failed: ${detail}`) as Error & { signature?: string };
+      err.signature = signature;
+      throw err;
+    }
+    if (status?.confirmationStatus === "confirmed" || status?.confirmationStatus === "finalized") {
+      return { signature, explorer: `https://explorer.solana.com/tx/${signature}?cluster=devnet` };
+    }
+    // Bail out early if the blockhash is dead — the tx will never land
+    const currentBlock = await connection.getBlockHeight("confirmed").catch(() => 0);
+    if (currentBlock > lastValidBlockHeight + 50) {
+      const err = new Error(`Transaction expired (blockhash too old). Signature: ${signature}`) as Error & { signature?: string };
+      err.signature = signature;
+      throw err;
+    }
+    await new Promise((r) => setTimeout(r, 1000));
+  }
+  const err = new Error(`Transaction not confirmed in 60s. Signature: ${signature}`) as Error & { signature?: string };
+  err.signature = signature;
+  throw err;
+}

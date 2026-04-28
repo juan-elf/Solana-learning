@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { PublicKey, LAMPORTS_PER_SOL } from "@solana/web3.js";
 import * as anchor from "@anchor-lang/core";
-import { getProgram, isAlreadyProcessedError } from "@/lib/program";
+import { getProgram, isAlreadyProcessedError, sendTx } from "@/lib/program";
 
 interface Props {
   vaultPDA: PublicKey | null;
@@ -31,18 +31,15 @@ export default function DepositWithdraw({ vaultPDA, vaultSeed, isAdmin, onSucces
     setLoading(true);
     setError("");
     try {
-      const program = getProgram(wallet as unknown as import("@/lib/program").BrowserWallet);
-      if (tab === "deposit") {
-        await program.methods
-          .deposit(vaultSeed, new anchor.BN(lamports))
-          .accounts({ vaultState: vaultPDA, user: wallet.publicKey })
-          .rpc();
-      } else {
-        await program.methods
-          .withdraw(vaultSeed, new anchor.BN(lamports))
-          .accounts({ vaultState: vaultPDA, admin: wallet.publicKey })
-          .rpc();
-      }
+      const browserWallet = wallet as unknown as import("@/lib/program").BrowserWallet;
+      const program = getProgram(browserWallet);
+      const builder = tab === "deposit"
+        ? program.methods.deposit(vaultSeed, new anchor.BN(lamports))
+            .accounts({ vaultState: vaultPDA, user: wallet.publicKey })
+        : program.methods.withdraw(vaultSeed, new anchor.BN(lamports))
+            .accounts({ vaultState: vaultPDA, admin: wallet.publicKey });
+      const result = await sendTx(builder, browserWallet);
+      console.log(`[${tab}] confirmed:`, result.explorer);
       setAmount("");
       onSuccess();
     } catch (e: any) {

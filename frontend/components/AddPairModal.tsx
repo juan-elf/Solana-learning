@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { PublicKey } from "@solana/web3.js";
 import * as anchor from "@anchor-lang/core";
-import { getProgram, getPairPDA, isAlreadyProcessedError, PROGRAM_ID, TOKEN_MINTS } from "@/lib/program";
+import { getProgram, getPairPDA, isAlreadyProcessedError, sendTx, PROGRAM_ID, TOKEN_MINTS } from "@/lib/program";
 
 interface Props {
   vaultPDA: PublicKey;
@@ -33,11 +33,14 @@ export default function AddPairModal({ vaultPDA, vaultSeed, onClose, onSuccess }
       const mintPubkey = new PublicKey(mint);
       const pairPDA = getPairPDA(PROGRAM_ID, vaultPDA, mintPubkey);
 
-      const program = getProgram(wallet as unknown as import("@/lib/program").BrowserWallet);
-      await program.methods
-        .addPair(vaultSeed, maxBps)
-        .accounts({ vaultState: vaultPDA, targetMint: mintPubkey, pairConfig: pairPDA, admin: wallet.publicKey })
-        .rpc();
+      const browserWallet = wallet as unknown as import("@/lib/program").BrowserWallet;
+      const program = getProgram(browserWallet);
+      const result = await sendTx(
+        program.methods.addPair(vaultSeed, maxBps)
+          .accounts({ vaultState: vaultPDA, targetMint: mintPubkey, pairConfig: pairPDA, admin: wallet.publicKey }),
+        browserWallet,
+      );
+      console.log("[addPair] confirmed:", result.explorer);
       onSuccess();
       onClose();
     } catch (e: any) {

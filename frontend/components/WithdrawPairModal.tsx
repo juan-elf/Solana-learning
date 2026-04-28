@@ -5,7 +5,7 @@ import { useWallet } from "@solana/wallet-adapter-react";
 import { PublicKey, Transaction, Connection } from "@solana/web3.js";
 import { createAssociatedTokenAccountIdempotentInstruction, getMint, getAccount } from "@solana/spl-token";
 import * as anchor from "@anchor-lang/core";
-import { getProgram, getVaultAta, getUserAta, getPairPDA, isAlreadyProcessedError, mintLabel, RPC_URL, PROGRAM_ID, TOKEN_PROGRAM_ID } from "@/lib/program";
+import { getProgram, getVaultAta, getUserAta, getPairPDA, isAlreadyProcessedError, mintLabel, sendTx, RPC_URL, PROGRAM_ID, TOKEN_PROGRAM_ID } from "@/lib/program";
 
 interface Props {
   vaultPDA: PublicKey;
@@ -72,7 +72,8 @@ export default function WithdrawPairModal({ vaultPDA, vaultSeed, mint, symbol, o
     setLoading(true);
     setError("");
     try {
-      const program = getProgram(wallet as unknown as import("@/lib/program").BrowserWallet);
+      const browserWallet = wallet as unknown as import("@/lib/program").BrowserWallet;
+      const program = getProgram(browserWallet);
       const vaultAta = getVaultAta(vaultPDA, mint);
       const adminAta = getUserAta(wallet.publicKey, mint);
       const pairPDA = getPairPDA(PROGRAM_ID, vaultPDA, mint);
@@ -82,19 +83,22 @@ export default function WithdrawPairModal({ vaultPDA, vaultSeed, mint, symbol, o
         wallet.publicKey, adminAta, wallet.publicKey, mint,
       );
 
-      await program.methods
-        .withdrawPairTokens(vaultSeed, new anchor.BN(raw.toString()))
-        .accounts({
-          vaultState: vaultPDA,
-          targetMint: mint,
-          pairConfig: pairPDA,
-          vaultTokenAccount: vaultAta,
-          adminTokenAccount: adminAta,
-          admin: wallet.publicKey,
-          tokenProgram: TOKEN_PROGRAM_ID,
-        })
-        .preInstructions([createAdminAta])
-        .rpc();
+      const result = await sendTx(
+        program.methods
+          .withdrawPairTokens(vaultSeed, new anchor.BN(raw.toString()))
+          .accounts({
+            vaultState: vaultPDA,
+            targetMint: mint,
+            pairConfig: pairPDA,
+            vaultTokenAccount: vaultAta,
+            adminTokenAccount: adminAta,
+            admin: wallet.publicKey,
+            tokenProgram: TOKEN_PROGRAM_ID,
+          })
+          .preInstructions([createAdminAta]),
+        browserWallet,
+      );
+      console.log("[withdrawPairTokens] confirmed:", result.explorer);
 
       onSuccess();
       onClose();
