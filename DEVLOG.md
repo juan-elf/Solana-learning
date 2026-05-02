@@ -224,6 +224,58 @@ Opsi B butuh Jupiter CPI yang **tidak jalan di devnet**, jadi pilih Opsi A dulu 
 - Setiap perubahan struct/instruksi yang bikin binary lebih besar = wajib cek `solana program show` size-nya, kalau perlu `solana program extend` sebelum redeploy. Cost ~0.00000696 SOL/byte rent reserve.
 - `provider.sendAndConfirm` di SDK Anchor v1 punya bug retry loop yang membuat tx sukses kelihatan failed di UI. Helper deteksi error string adalah workaround paling murah; fix sungguhnya butuh manual `transaction()` + `sendRawTransaction({ maxRetries: 0 })` + polling status.
 
+#### Sesi 6 — Quick Wins (Fase A/B/C)
+
+Setelah Sesi 5 minta saran pengembangan lanjutan; jadwal disepakati 3 fase quick win, masing-masing self-contained.
+
+**Fase A — Slippage enforcement on-chain + admin pause/resume (commit `ce7f51c`)**
+
+Dua bug bersama satu redeploy:
+
+1. `vault.max_slippage_bps` cuma disimpan di `VaultState` tapi tidak pernah diverifikasi. `execute_swap` sekarang ambil arg baru `expected_out` (Jupiter quote `outAmount`), hitung slippage aktual `(expected_out - min_amount_out) * 10000 / expected_out`, dan reject kalau melebihi `vault.max_slippage_bps`. Signature `execute_swap` jadi 5-arg (breaking buat bot lama, tinggal tambah satu nilai dari quote).
+
+2. `is_active` cuma di-set sekali di `initialize` — tidak ada jalur untuk pause/resume vault. Tambah instruksi `set_vault_active(seed, active)` (`has_one = admin`). UI `VaultCard` ganti badge statis jadi tombol clickable untuk admin.
+
+Redeploy: binary 286,576 → 294,808 bytes. ProgramData extend +8000 (cost ~0.056 SOL). Smoke-tested set_vault_active flip `true → false → true` di vault `3Wk7qSVo...`, semua sukses.
+
+**Fase B — Manual tx flow `sendTx` helper (commit `f35e8f2`)**
+
+Di Sesi 5 ditemukan bug retry-loop di `provider.sendAndConfirmRawTransaction` yang nyebabin "already processed" toast. Workaround `isAlreadyProcessedError()` itu band-aid; Fase B fix root cause:
+
+```ts
+// lib/program.ts
+export async function sendTx(builder, wallet) {
+  const tx = await builder.transaction();
+  // pasang blockhash, sign sekali via wallet
+  const sig = await connection.sendRawTransaction(raw, { maxRetries: 0 });
+  // poll getSignatureStatuses tiap 1s sampai 60s, bail kalau blockhash kadaluwarsa
+  // on err, fetch logs via getTransaction supaya error UI actionable
+  return { signature, explorer };
+}
+```
+
+Setiap `.rpc()` di komponen di-refactor ke `sendTx`: `VaultCard` (initialize + setActive), `DepositWithdraw`, `AddPairModal`, `PairsTable.togglePair`, `WithdrawPairModal`. Setiap success di-log dengan **explorer link** clickable. `isAlreadyProcessedError` tetap dipertahankan sebagai defense-in-depth.
+
+Smoke test: `setVaultActive` di-flip dua kali via flow baru, dua tx confirmed bersih tanpa retry noise.
+
+**Fase C — P&L dashboard via Jupiter Price API (commit `67197b0`)**
+
+`lib/prices.ts` — fetcher Jupiter Price API v3 lite (`https://lite-api.jup.ag/price/v3?ids=<mints>`, no auth, USD prices). Plus helper `formatUsd()` + `formatPct()`.
+
+`PairsTable.tsx` ditambah:
+- **Kolom P&L** per row: hitung `(token_balance × token_usd) - (total_swapped_sol × sol_usd)`, render `+$X.XX (+Y.YY%)` color-coded hijau/merah.
+- **Aggregate summary** di header tabel: `Invested $X / Now $Y / ±$Z (±%)` agregat semua pair yang ada price-nya.
+- Graceful fallback "—" untuk token yang Jupiter tidak knows (devnet USDC, custom TEST mint).
+
+Smoke-tested dengan `node` script: SOL $83.90, JUP $0.19, BONK $0.0000062, WIF $0.18 — semua live. USDC devnet & TEST tidak ada di Jupiter mainnet pricing (expected) → fallback aktif.
+
+**Total kerja Sesi 6: 4 commit (`ce7f51c → f35e8f2 → 67197b0`), 1 redeploy program, 0 downtime.**
+
+**Lesson learned**
+- `vault.max_slippage_bps` adalah contoh klasik "field disimpan tapi tidak dipakai" — security hole yang gampang kelewat. Audit checklist: untuk setiap field konfigurasi di state, cari tempat yang harus apply constraint-nya.
+- Replace SDK abstraction yang punya bug (Anchor `provider.sendAndConfirm`) dengan code manual yang spesifik > terus-menerus tambah workaround di catch block. Manual flow plus polling lebih panjang ~30 baris tapi root cause-nya bersih.
+- Jupiter Price API v3 lite tier (no auth, no SDK) cukup untuk MVP — tidak perlu hosting Pyth client atau langganan service. Cocok untuk dashboard frontend yang refresh on-demand.
+
 ### 4. Testing & Deployment
 - **Local Tests**: Wrote comprehensive TypeScript tests in `tests/vault_test.ts`.
 - **Deployment**: Successfully deployed to Solana Devnet after resolving airdrop rate limits via web faucets.
@@ -266,6 +318,10 @@ Opsi B butuh Jupiter CPI yang **tidak jalan di devnet**, jadi pilih Opsi A dulu 
 - [x] Deployed ke Vercel + live debug (camelCase IDL, invalid MET mint, Buffer polyfill, SSR hydration, per-wallet seed)
 - [x] DCA withdraw (Opsi A): `withdraw_pair_tokens` instruksi + WithdrawPairModal UI — verified end-to-end di devnet (test mint, CLI smoke + Phantom UI)
 - [x] Workaround "already processed" retry-loop bug di Anchor v1 SDK
+- [x] Slippage enforcement on-chain (`execute_swap` validates `slippage_bps_used <= vault.max_slippage_bps`)
+- [x] Admin pause/resume (`set_vault_active` instruksi + clickable VaultCard badge)
+- [x] Manual tx flow (`sendTx` helper replacing `.rpc()`) — root cause fix untuk retry-loop bug
+- [x] P&L dashboard (per-pair USD P&L + aggregate summary via Jupiter Price API v3 lite)
 - [ ] DCA withdraw (Opsi B): swap-back ke SOL via Jupiter (mainnet only)
 - [ ] LiteSVM unit tests (Rust)
 - [ ] Meteora DLMM integration (Phase 2)
