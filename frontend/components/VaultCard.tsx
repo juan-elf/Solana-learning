@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { PublicKey } from "@solana/web3.js";
 import * as anchor from "@anchor-lang/core";
-import { Wallet } from "lucide-react";
+import { Wallet, ChevronDown } from "lucide-react";
 import { getProgram, getVaultPDA, getVaultSeed, isAlreadyProcessedError, lamportsToSol, sendTx, PROGRAM_ID } from "@/lib/program";
 import { toastSuccess, toastError } from "@/lib/toast";
 import { HelpHint } from "./Tooltip";
@@ -177,39 +177,48 @@ export default function VaultCard({ onVaultLoaded, refreshTrigger }: Props) {
 
       <div>
         <p className="text-slate-500 text-xs mb-1">Balance</p>
-        <p className="text-3xl font-bold text-white">
+        <p className="text-4xl font-bold text-white tracking-tight">
           {lamportsToSol(vault.totalFunds?.toNumber() ?? 0)}
-          <span className="text-lg text-slate-400 ml-1">SOL</span>
+          <span className="text-xl text-slate-400 ml-1.5 font-medium">SOL</span>
+        </p>
+        <p className="text-xs text-slate-500 mt-1.5">
+          Max slippage {vault.maxSlippageBps / 100}% &middot; {isAdmin ? "you are admin" : "view-only"}
         </p>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 pt-2 border-t border-slate-800">
-        <div>
-          <p className="text-slate-500 text-xs">Admin</p>
-          <p className="text-slate-300 text-xs font-mono truncate">{vault.admin.toBase58().slice(0, 16)}…</p>
+      <details className="group border-t border-slate-800 pt-3 -mx-1">
+        <summary className="flex items-center justify-between cursor-pointer list-none px-1 py-1 rounded text-xs text-slate-500 hover:text-slate-300 transition-colors">
+          <span className="uppercase tracking-wider">Technical details</span>
+          <ChevronDown className="w-3.5 h-3.5 transition-transform group-open:rotate-180" />
+        </summary>
+        <div className="grid grid-cols-2 gap-3 mt-3 px-1">
+          <div>
+            <p className="text-slate-500 text-xs">Admin</p>
+            <p className="text-slate-300 text-xs font-mono truncate">{vault.admin.toBase58().slice(0, 16)}…</p>
+          </div>
+          <div>
+            <p className="text-slate-500 text-xs flex items-center gap-1">
+              Max Slippage
+              <HelpHint text="Maximum slippage tolerance the bot can use per swap. Enforced on-chain — swaps exceeding this cap are rejected." />
+            </p>
+            <p className="text-slate-300 text-xs">{vault.maxSlippageBps / 100}%</p>
+          </div>
+          <div>
+            <p className="text-slate-500 text-xs flex items-center gap-1">
+              PDA
+              <HelpHint text="Program Derived Address — the on-chain account holding your vault state. Derived deterministically from the seed." />
+            </p>
+            <p className="text-slate-300 text-xs font-mono truncate">{vaultPDA.toBase58().slice(0, 16)}…</p>
+          </div>
+          <div>
+            <p className="text-slate-500 text-xs flex items-center gap-1">
+              Seed
+              <HelpHint text="Per-wallet seed (vault_<8 chars of pubkey>) so each wallet gets its own isolated vault." />
+            </p>
+            <p className="text-slate-300 text-xs font-mono">{vaultSeed}</p>
+          </div>
         </div>
-        <div>
-          <p className="text-slate-500 text-xs flex items-center gap-1">
-            Max Slippage
-            <HelpHint text="Maximum slippage tolerance the bot can use per swap. Enforced on-chain — swaps exceeding this cap are rejected." />
-          </p>
-          <p className="text-slate-300 text-xs">{vault.maxSlippageBps / 100}%</p>
-        </div>
-        <div>
-          <p className="text-slate-500 text-xs flex items-center gap-1">
-            PDA
-            <HelpHint text="Program Derived Address — the on-chain account holding your vault state. Derived deterministically from the seed." />
-          </p>
-          <p className="text-slate-300 text-xs font-mono truncate">{vaultPDA.toBase58().slice(0, 16)}…</p>
-        </div>
-        <div>
-          <p className="text-slate-500 text-xs flex items-center gap-1">
-            Seed
-            <HelpHint text="Per-wallet seed (vault_<8 chars of pubkey>) so each wallet gets its own isolated vault." />
-          </p>
-          <p className="text-slate-300 text-xs font-mono">{vaultSeed}</p>
-        </div>
-      </div>
+      </details>
     </div>
   );
 }

@@ -1,27 +1,75 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useWallet } from "@solana/wallet-adapter-react";
-import { PublicKey, LAMPORTS_PER_SOL } from "@solana/web3.js";
+import { Connection, PublicKey, LAMPORTS_PER_SOL } from "@solana/web3.js";
 import * as anchor from "@anchor-lang/core";
-import { getProgram, isAlreadyProcessedError, sendTx } from "@/lib/program";
+import { getProgram, isAlreadyProcessedError, sendTx, RPC_URL } from "@/lib/program";
 import { toastSuccess, toastError } from "@/lib/toast";
 
 interface Props {
   vaultPDA: PublicKey | null;
   vaultSeed: string;
   isAdmin: boolean;
+  refreshTrigger: number;
   onSuccess: () => void;
 }
 
 type Tab = "deposit" | "withdraw";
 
-export default function DepositWithdraw({ vaultPDA, vaultSeed, isAdmin, onSuccess }: Props) {
+// Reserve a tiny amount of SOL for tx fees + rent so "Max" deposit doesn't
+// drain the wallet to zero and brick the next signature.
+const FEE_RESERVE_SOL = 0.005;
+
+export default function DepositWithdraw({ vaultPDA, vaultSeed, isAdmin, refreshTrigger, onSuccess }: Props) {
   const wallet = useWallet();
   const [tab, setTab] = useState<Tab>("deposit");
   const [amount, setAmount] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [walletSol, setWalletSol] = useState<number | null>(null);
+  const [vaultSol, setVaultSol] = useState<number | null>(null);
+
+  const walletKey = wallet.publicKey?.toBase58() ?? "";
+  const vaultKey = vaultPDA?.toBase58() ?? "";
+
+  useEffect(() => {
+    if (!walletKey || !vaultKey) return;
+    let cancelled = false;
+    (async () => {
+      const conn = new Connection(RPC_URL, "confirmed");
+      try {
+        const [w, v] = await Promise.all([
+          conn.getBalance(new PublicKey(walletKey)),
+          conn.getAccountInfo(new PublicKey(vaultKey)),
+        ]);
+        if (cancelled) return;
+        setWalletSol(w / LAMPORTS_PER_SOL);
+        // total_funds is at offset 8 (disc) + 32 (admin) = 40, u64 little-endian
+        if (v?.data && v.data.length >= 48) {
+          const lamports = Number(v.data.readBigUInt64LE(40));
+          setVaultSol(lamports / LAMPORTS_PER_SOL);
+        }
+      } catch (e) {
+        console.warn("[DepositWithdraw] balance fetch:", e);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [walletKey, vaultKey, refreshTrigger]);
+
+  const setMax = () => {
+    if (tab === "deposit") {
+      if (walletSol === null) return;
+      const max = Math.max(0, walletSol - FEE_RESERVE_SOL);
+      setAmount(max.toFixed(4));
+    } else {
+      if (vaultSol === null) return;
+      setAmount(vaultSol.toFixed(4));
+    }
+  };
+
+  const presetBalance = tab === "deposit" ? walletSol : vaultSol;
+  const presetLabel = tab === "deposit" ? "Wallet" : "Vault";
 
   const handleSubmit = async () => {
     if (!wallet.publicKey || !wallet.signTransaction || !vaultPDA || !vaultSeed) return;
@@ -82,7 +130,23 @@ export default function DepositWithdraw({ vaultPDA, vaultSeed, isAdmin, onSucces
       </div>
 
       <div className="space-y-3">
-        <div className="flex items-center gap-2 rounded-lg bg-slate-800 border border-slate-700 px-3 py-2">
+        <div className="flex items-center justify-between text-xs">
+          <span className="text-slate-500">
+            {presetLabel}{" "}
+            <span className="text-slate-300 font-mono">
+              {presetBalance !== null ? `${presetBalance.toFixed(4)} SOL` : "—"}
+            </span>
+          </span>
+          <button
+            type="button"
+            onClick={setMax}
+            disabled={!connected || loading || presetBalance === null || presetBalance <= 0}
+            className="text-cyan-400 hover:text-cyan-300 disabled:opacity-40 disabled:cursor-not-allowed font-medium transition-colors"
+          >
+            Max
+          </button>
+        </div>
+        <div className="flex items-center gap-2 rounded-lg bg-slate-800 border border-slate-700 px-3 py-2 focus-within:border-cyan-500/50 transition-colors">
           <input
             type="number"
             min="0"

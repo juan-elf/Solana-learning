@@ -32,7 +32,7 @@ export default function Home() {
       <main className="flex-1 max-w-5xl mx-auto w-full px-4 py-8 space-y-6">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <VaultCard onVaultLoaded={handleVaultLoaded} refreshTrigger={refreshTick} />
-          <DepositWithdraw vaultPDA={vaultPDA} vaultSeed={vaultSeed} isAdmin={isAdmin} onSuccess={refresh} />
+          <DepositWithdraw vaultPDA={vaultPDA} vaultSeed={vaultSeed} isAdmin={isAdmin} refreshTrigger={refreshTick} onSuccess={refresh} />
         </div>
 
         <PairsTable

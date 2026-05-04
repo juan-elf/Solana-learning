@@ -225,96 +225,178 @@ export default function PairsTable({ vaultPDA, vaultSeed, isAdmin, refreshTrigge
           ) : undefined}
         />
       ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="text-slate-500 text-xs border-b border-slate-800">
-                <th className="px-6 py-3 text-left font-medium">Pair</th>
-                <th className="px-4 py-3 text-right font-medium">
-                  <span className="inline-flex items-center gap-1 justify-end">
-                    Max %
-                    <HelpHint text="Maximum % of vault SOL the bot can swap into this pair. Enforced on-chain per swap." />
-                  </span>
-                </th>
-                <th className="px-4 py-3 text-right font-medium">
-                  <span className="inline-flex items-center gap-1 justify-end">
-                    SOL In
-                    <HelpHint text="Cumulative SOL the bot has spent buying this token (sum of all execute_swap inputs)." />
-                  </span>
-                </th>
-                <th className="px-4 py-3 text-right font-medium">
-                  <span className="inline-flex items-center gap-1 justify-end">
-                    Balance
-                    <HelpHint text="Current token balance in the vault's ATA — what's withdrawable." />
-                  </span>
-                </th>
-                <th className="px-4 py-3 text-right font-medium">
-                  <span className="inline-flex items-center gap-1 justify-end">
-                    P&amp;L
-                    <HelpHint text="USD value now (token balance × spot price) minus invested USD (SOL spent × SOL price). Live prices via Jupiter Price API." />
-                  </span>
-                </th>
-                <th className="px-4 py-3 text-right font-medium">Status</th>
-                <th className="px-6 py-3 text-right font-medium">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {pairs.map((row) => {
-                const hasBalance = row.tokenBalance > 0n;
-                const pnl = computePnL(row, prices);
-                const pnlColor = pnl.pnlUsd >= 0 ? "text-emerald-400" : "text-red-400";
-                return (
-                  <tr key={row.symbol} className="border-b border-slate-800/60 hover:bg-slate-800/30 transition-colors">
-                    <td className="px-6 py-4">
-                      <span className="font-semibold text-white">{row.symbol}</span>
-                      <span className="ml-2 text-slate-500 text-xs">{mintLabel(row.mint.toBase58())}</span>
-                    </td>
-                    <td className="px-4 py-4 text-right text-slate-300">{(row.maxBps / 100).toFixed(0)}%</td>
-                    <td className="px-4 py-4 text-right text-slate-300">{lamportsToSol(row.totalSwapped?.toNumber() ?? 0)}</td>
-                    <td className="px-4 py-4 text-right font-mono text-slate-200">
-                      {formatTokenBalance(row.tokenBalance, row.tokenDecimals)}
-                    </td>
-                    <td className="px-4 py-4 text-right">
-                      {pnl.priced ? (
-                        <div className="flex flex-col items-end">
-                          <span className={`font-mono ${pnlColor} font-semibold`}>
-                            {pnl.pnlUsd >= 0 ? "+" : ""}{formatUsd(pnl.pnlUsd)}
+        <>
+          {/* Mobile aggregate summary (header version is hidden < md) */}
+          {summary.anyPriced && (
+            <div className="md:hidden px-6 py-3 border-b border-slate-800/60 flex items-center justify-between text-xs">
+              <span className="text-slate-500">
+                Invested <span className="text-slate-200 font-mono">{formatUsd(summary.invested)}</span>
+              </span>
+              <span className={`font-mono font-semibold ${summary.pnl >= 0 ? "text-emerald-400" : "text-red-400"}`}>
+                {summary.pnl >= 0 ? "+" : ""}{formatUsd(summary.pnl)} ({formatPct(summary.pnlPct)})
+              </span>
+            </div>
+          )}
+
+          {/* Desktop: table */}
+          <div className="hidden md:block overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-slate-500 text-xs border-b border-slate-800">
+                  <th className="px-6 py-3 text-left font-medium">Pair</th>
+                  <th className="px-4 py-3 text-right font-medium">
+                    <span className="inline-flex items-center gap-1 justify-end">
+                      Max %
+                      <HelpHint text="Maximum % of vault SOL the bot can swap into this pair. Enforced on-chain per swap." />
+                    </span>
+                  </th>
+                  <th className="px-4 py-3 text-right font-medium">
+                    <span className="inline-flex items-center gap-1 justify-end">
+                      SOL In
+                      <HelpHint text="Cumulative SOL the bot has spent buying this token (sum of all execute_swap inputs)." />
+                    </span>
+                  </th>
+                  <th className="px-4 py-3 text-right font-medium">
+                    <span className="inline-flex items-center gap-1 justify-end">
+                      Balance
+                      <HelpHint text="Current token balance in the vault's ATA — what's withdrawable." />
+                    </span>
+                  </th>
+                  <th className="px-4 py-3 text-right font-medium">
+                    <span className="inline-flex items-center gap-1 justify-end">
+                      P&amp;L
+                      <HelpHint text="USD value now (token balance × spot price) minus invested USD (SOL spent × SOL price). Live prices via Jupiter Price API." />
+                    </span>
+                  </th>
+                  <th className="px-4 py-3 text-right font-medium">Status</th>
+                  <th className="px-6 py-3 text-right font-medium">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {pairs.map((row) => {
+                  const hasBalance = row.tokenBalance > 0n;
+                  const pnl = computePnL(row, prices);
+                  const pnlColor = pnl.pnlUsd >= 0 ? "text-emerald-400" : "text-red-400";
+                  return (
+                    <tr key={row.symbol} className="border-b border-slate-800/60 hover:bg-slate-800/30 transition-colors">
+                      <td className="px-6 py-4">
+                        <span className="font-semibold text-white">{row.symbol}</span>
+                        <span className="ml-2 text-slate-500 text-xs">{mintLabel(row.mint.toBase58())}</span>
+                      </td>
+                      <td className="px-4 py-4 text-right text-slate-300">{(row.maxBps / 100).toFixed(0)}%</td>
+                      <td className="px-4 py-4 text-right text-slate-300">{lamportsToSol(row.totalSwapped?.toNumber() ?? 0)}</td>
+                      <td className="px-4 py-4 text-right font-mono text-slate-200">
+                        {formatTokenBalance(row.tokenBalance, row.tokenDecimals)}
+                      </td>
+                      <td className="px-4 py-4 text-right">
+                        {pnl.priced ? (
+                          <div className="flex flex-col items-end">
+                            <span className={`font-mono ${pnlColor} font-semibold`}>
+                              {pnl.pnlUsd >= 0 ? "+" : ""}{formatUsd(pnl.pnlUsd)}
+                            </span>
+                            <span className={`text-xs font-mono ${pnlColor}`}>{formatPct(pnl.pnlPct)}</span>
+                          </div>
+                        ) : (
+                          <span className="text-slate-600 text-xs" title="Token tidak punya market price">—</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-4 text-right">
+                        {isAdmin ? (
+                          <button onClick={() => togglePair(row)} disabled={toggling === row.symbol}
+                            className={`text-xs px-2.5 py-1 rounded-full border font-medium transition-colors disabled:opacity-50 ${row.isActive ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/30" : "bg-slate-700/50 text-slate-400 border-slate-600 hover:bg-slate-700"}`}>
+                            {toggling === row.symbol ? "…" : row.isActive ? "● ON" : "○ OFF"}
+                          </button>
+                        ) : (
+                          <span className={`text-xs px-2.5 py-1 rounded-full border font-medium ${row.isActive ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30" : "bg-slate-700/50 text-slate-400 border-slate-600"}`}>
+                            {row.isActive ? "● ON" : "○ OFF"}
                           </span>
-                          <span className={`text-xs font-mono ${pnlColor}`}>{formatPct(pnl.pnlPct)}</span>
-                        </div>
+                        )}
+                      </td>
+                      <td className="px-6 py-4 text-right">
+                        {isAdmin && (
+                          <button
+                            onClick={() => setWithdrawTarget(row)}
+                            disabled={!hasBalance}
+                            title={hasBalance ? `Withdraw ${row.symbol}` : "Belum ada saldo"}
+                            className="text-xs px-2.5 py-1 rounded-lg border bg-emerald-600/15 text-emerald-300 border-emerald-500/30 hover:bg-emerald-600/30 disabled:opacity-30 disabled:cursor-not-allowed transition-colors">
+                            ↓ Withdraw
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Mobile: card grid */}
+          <div className="md:hidden divide-y divide-slate-800/60">
+            {pairs.map((row) => {
+              const hasBalance = row.tokenBalance > 0n;
+              const pnl = computePnL(row, prices);
+              const pnlColor = pnl.pnlUsd >= 0 ? "text-emerald-400" : "text-red-400";
+              return (
+                <div key={row.symbol} className="px-5 py-4 space-y-3">
+                  {/* Top row: symbol + status */}
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <span className="font-semibold text-white text-base">{row.symbol}</span>
+                      <span className="ml-2 text-slate-500 text-xs">{mintLabel(row.mint.toBase58())}</span>
+                    </div>
+                    {isAdmin ? (
+                      <button onClick={() => togglePair(row)} disabled={toggling === row.symbol}
+                        className={`text-xs px-2.5 py-1 rounded-full border font-medium transition-colors disabled:opacity-50 ${row.isActive ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30" : "bg-slate-700/50 text-slate-400 border-slate-600"}`}>
+                        {toggling === row.symbol ? "…" : row.isActive ? "● ON" : "○ OFF"}
+                      </button>
+                    ) : (
+                      <span className={`text-xs px-2.5 py-1 rounded-full border font-medium ${row.isActive ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30" : "bg-slate-700/50 text-slate-400 border-slate-600"}`}>
+                        {row.isActive ? "● ON" : "○ OFF"}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Primary: balance + P&L */}
+                  <div className="flex items-end justify-between">
+                    <div>
+                      <p className="text-slate-500 text-xs">Balance</p>
+                      <p className="text-slate-100 font-mono text-base">
+                        {formatTokenBalance(row.tokenBalance, row.tokenDecimals)} <span className="text-slate-500 text-xs">{row.symbol}</span>
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-slate-500 text-xs">P&amp;L</p>
+                      {pnl.priced ? (
+                        <p className={`font-mono ${pnlColor} font-semibold`}>
+                          {pnl.pnlUsd >= 0 ? "+" : ""}{formatUsd(pnl.pnlUsd)}
+                          <span className="ml-1 text-xs">({formatPct(pnl.pnlPct)})</span>
+                        </p>
                       ) : (
-                        <span className="text-slate-600 text-xs" title="Token tidak punya market price">—</span>
+                        <p className="text-slate-600 text-xs">—</p>
                       )}
-                    </td>
-                    <td className="px-4 py-4 text-right">
-                      {isAdmin ? (
-                        <button onClick={() => togglePair(row)} disabled={toggling === row.symbol}
-                          className={`text-xs px-2.5 py-1 rounded-full border font-medium transition-colors disabled:opacity-50 ${row.isActive ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/30" : "bg-slate-700/50 text-slate-400 border-slate-600 hover:bg-slate-700"}`}>
-                          {toggling === row.symbol ? "…" : row.isActive ? "● ON" : "○ OFF"}
-                        </button>
-                      ) : (
-                        <span className={`text-xs px-2.5 py-1 rounded-full border font-medium ${row.isActive ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30" : "bg-slate-700/50 text-slate-400 border-slate-600"}`}>
-                          {row.isActive ? "● ON" : "○ OFF"}
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-6 py-4 text-right">
-                      {isAdmin && (
-                        <button
-                          onClick={() => setWithdrawTarget(row)}
-                          disabled={!hasBalance}
-                          title={hasBalance ? `Withdraw ${row.symbol}` : "Belum ada saldo"}
-                          className="text-xs px-2.5 py-1 rounded-lg border bg-emerald-600/15 text-emerald-300 border-emerald-500/30 hover:bg-emerald-600/30 disabled:opacity-30 disabled:cursor-not-allowed transition-colors">
-                          ↓ Withdraw
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+                    </div>
+                  </div>
+
+                  {/* Secondary: max% + SOL In + withdraw */}
+                  <div className="flex items-center justify-between gap-2 pt-1 border-t border-slate-800/60">
+                    <div className="flex items-center gap-3 text-xs text-slate-500">
+                      <span>Max <span className="text-slate-300">{(row.maxBps / 100).toFixed(0)}%</span></span>
+                      <span>SOL in <span className="text-slate-300">{lamportsToSol(row.totalSwapped?.toNumber() ?? 0)}</span></span>
+                    </div>
+                    {isAdmin && (
+                      <button
+                        onClick={() => setWithdrawTarget(row)}
+                        disabled={!hasBalance}
+                        className="text-xs px-2.5 py-1 rounded-lg border bg-emerald-600/15 text-emerald-300 border-emerald-500/30 hover:bg-emerald-600/30 disabled:opacity-30 disabled:cursor-not-allowed transition-colors">
+                        ↓ Withdraw
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </>
       )}
 
       {withdrawTarget && (
