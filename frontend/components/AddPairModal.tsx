@@ -5,6 +5,7 @@ import { useWallet } from "@solana/wallet-adapter-react";
 import { PublicKey } from "@solana/web3.js";
 import * as anchor from "@anchor-lang/core";
 import { getProgram, getPairPDA, isAlreadyProcessedError, sendTx, PROGRAM_ID, TOKEN_MINTS } from "@/lib/program";
+import { toastSuccess, toastError } from "@/lib/toast";
 
 interface Props {
   vaultPDA: PublicKey;
@@ -40,7 +41,7 @@ export default function AddPairModal({ vaultPDA, vaultSeed, onClose, onSuccess }
           .accounts({ vaultState: vaultPDA, targetMint: mintPubkey, pairConfig: pairPDA, admin: wallet.publicKey }),
         browserWallet,
       );
-      console.log("[addPair] confirmed:", result.explorer);
+      toastSuccess("Pair registered", `${symbol} @ ${pct}% max`, result.explorer);
       onSuccess();
       onClose();
     } catch (e: any) {
@@ -50,10 +51,12 @@ export default function AddPairModal({ vaultPDA, vaultSeed, onClose, onSuccess }
         onSuccess();
         onClose();
       } else if (isAlreadyProcessedError(e)) {
+        toastSuccess("Pair registered", `${symbol} @ ${pct}% max`);
         onSuccess();
         onClose();
       } else {
         setError(msg);
+        toastError("Add pair failed", e);
       }
     } finally {
       setLoading(false);
@@ -98,7 +101,7 @@ export default function AddPairModal({ vaultPDA, vaultSeed, onClose, onSuccess }
             Cancel
           </button>
           <button onClick={handleAdd} disabled={loading}
-            className="flex-1 py-2 rounded-lg bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white text-sm font-semibold transition-colors">
+            className="flex-1 py-2 rounded-lg bg-gradient-to-br from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 disabled:opacity-50 text-white text-sm font-semibold shadow-lg shadow-cyan-500/20 transition-all">
             {loading ? "Adding…" : "Add Pair"}
           </button>
         </div>

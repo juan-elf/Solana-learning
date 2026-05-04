@@ -6,6 +6,7 @@ import { PublicKey, Transaction, Connection } from "@solana/web3.js";
 import { createAssociatedTokenAccountIdempotentInstruction, getMint, getAccount } from "@solana/spl-token";
 import * as anchor from "@anchor-lang/core";
 import { getProgram, getVaultAta, getUserAta, getPairPDA, isAlreadyProcessedError, mintLabel, sendTx, RPC_URL, PROGRAM_ID, TOKEN_PROGRAM_ID } from "@/lib/program";
+import { toastSuccess, toastError } from "@/lib/toast";
 
 interface Props {
   vaultPDA: PublicKey;
@@ -98,12 +99,13 @@ export default function WithdrawPairModal({ vaultPDA, vaultSeed, mint, symbol, o
           .preInstructions([createAdminAta]),
         browserWallet,
       );
-      console.log("[withdrawPairTokens] confirmed:", result.explorer);
+      toastSuccess(`${symbol} withdrawn`, `${value} ${symbol}`, result.explorer);
 
       onSuccess();
       onClose();
     } catch (e: any) {
       if (isAlreadyProcessedError(e)) {
+        toastSuccess(`${symbol} withdrawn`, `${value} ${symbol}`);
         onSuccess();
         onClose();
         return;
@@ -115,6 +117,7 @@ export default function WithdrawPairModal({ vaultPDA, vaultSeed, mint, symbol, o
         msg = e.logs.join("\n");
       }
       setError(msg);
+      toastError(`Withdraw ${symbol} failed`, e);
     } finally {
       setLoading(false);
     }

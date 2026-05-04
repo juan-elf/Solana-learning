@@ -5,8 +5,13 @@ import { useWallet } from "@solana/wallet-adapter-react";
 import { PublicKey, Connection } from "@solana/web3.js";
 import { getAccount, getMint } from "@solana/spl-token";
 import * as anchor from "@anchor-lang/core";
+import { Layers, Plus } from "lucide-react";
 import { getProgram, getPairPDA, getVaultAta, isAlreadyProcessedError, mintLabel, lamportsToSol, sendTx, RPC_URL, PROGRAM_ID, TOKEN_MINTS } from "@/lib/program";
 import { fetchTokenPrices, formatUsd, formatPct, SOL_MINT, type PriceMap } from "@/lib/prices";
+import { toastSuccess, toastError } from "@/lib/toast";
+import { HelpHint } from "./Tooltip";
+import { PairsTableSkeleton } from "./Skeleton";
+import { EmptyState } from "./EmptyState";
 import WithdrawPairModal from "./WithdrawPairModal";
 
 interface PairRow {
@@ -131,13 +136,18 @@ export default function PairsTable({ vaultPDA, vaultSeed, isAdmin, refreshTrigge
           .accounts({ vaultState: vaultPDA, targetMint: row.mint, pairConfig: row.pairPDA, admin: wallet.publicKey }),
         browserWallet,
       );
-      console.log(`[togglePair ${row.symbol}=${!row.isActive}] confirmed:`, result.explorer);
+      toastSuccess(
+        `${row.symbol} ${!row.isActive ? "resumed" : "paused"}`,
+        undefined,
+        result.explorer,
+      );
       await fetchPairs();
     } catch (e: any) {
       if (isAlreadyProcessedError(e)) {
+        toastSuccess(`${row.symbol} ${!row.isActive ? "resumed" : "paused"}`);
         await fetchPairs();
       } else {
-        alert("Toggle failed: " + e.message);
+        toastError(`Toggle ${row.symbol} failed`, e);
       }
     } finally {
       setToggling(null);
@@ -168,6 +178,7 @@ export default function PairsTable({ vaultPDA, vaultSeed, isAdmin, refreshTrigge
   }, [pairs, prices]);
 
   if (!vaultPDA) return null;
+  if (loading) return <PairsTableSkeleton />;
 
   return (
     <div className="rounded-2xl border border-slate-800 bg-slate-900 overflow-hidden">
@@ -175,7 +186,7 @@ export default function PairsTable({ vaultPDA, vaultSeed, isAdmin, refreshTrigge
         <div className="flex items-center gap-4">
           <h2 className="text-slate-300 text-sm font-medium uppercase tracking-wider">Trading Pairs</h2>
           {summary.anyPriced && (
-            <div className="flex items-center gap-3 text-xs">
+            <div className="hidden md:flex items-center gap-3 text-xs">
               <span className="text-slate-500">
                 Invested <span className="text-slate-200 font-mono">{formatUsd(summary.invested)}</span>
               </span>
@@ -189,31 +200,60 @@ export default function PairsTable({ vaultPDA, vaultSeed, isAdmin, refreshTrigge
           )}
         </div>
         {isAdmin && (
-          <button onClick={onOpenAddPair} className="text-xs px-3 py-1.5 rounded-lg bg-purple-600/20 hover:bg-purple-600/40 text-purple-400 border border-purple-500/30 transition-colors">
-            + Add Pair
+          <button onClick={onOpenAddPair} className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-300 border border-cyan-500/30 transition-colors">
+            <Plus className="w-3.5 h-3.5" />
+            Add Pair
           </button>
         )}
       </div>
 
-      {loading ? (
-        <div className="flex justify-center py-8">
-          <div className="w-5 h-5 border-2 border-purple-400 border-t-transparent rounded-full animate-spin" />
-        </div>
-      ) : pairs.length === 0 ? (
-        <div className="py-10 text-center text-slate-500 text-sm">
-          Belum ada pair terdaftar.{" "}
-          {isAdmin && <button onClick={onOpenAddPair} className="text-purple-400 underline">Tambah pair</button>}
-        </div>
+      {pairs.length === 0 ? (
+        <EmptyState
+          icon={<Layers className="w-5 h-5" />}
+          title="Belum ada trading pair"
+          description={isAdmin
+            ? "Daftarkan token target (JUP, USDC, BONK, ...) supaya bot bisa eksekusi DCA dengan alokasi yang kamu set."
+            : "Admin vault belum mendaftarkan pair apapun."}
+          action={isAdmin ? (
+            <button
+              onClick={onOpenAddPair}
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-gradient-to-br from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white text-sm font-medium shadow-lg shadow-cyan-500/20 transition-all"
+            >
+              <Plus className="w-4 h-4" />
+              Tambah pair pertama
+            </button>
+          ) : undefined}
+        />
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="text-slate-500 text-xs border-b border-slate-800">
                 <th className="px-6 py-3 text-left font-medium">Pair</th>
-                <th className="px-4 py-3 text-right font-medium">Max %</th>
-                <th className="px-4 py-3 text-right font-medium">SOL In</th>
-                <th className="px-4 py-3 text-right font-medium">Balance</th>
-                <th className="px-4 py-3 text-right font-medium">P&amp;L</th>
+                <th className="px-4 py-3 text-right font-medium">
+                  <span className="inline-flex items-center gap-1 justify-end">
+                    Max %
+                    <HelpHint text="Maximum % of vault SOL the bot can swap into this pair. Enforced on-chain per swap." />
+                  </span>
+                </th>
+                <th className="px-4 py-3 text-right font-medium">
+                  <span className="inline-flex items-center gap-1 justify-end">
+                    SOL In
+                    <HelpHint text="Cumulative SOL the bot has spent buying this token (sum of all execute_swap inputs)." />
+                  </span>
+                </th>
+                <th className="px-4 py-3 text-right font-medium">
+                  <span className="inline-flex items-center gap-1 justify-end">
+                    Balance
+                    <HelpHint text="Current token balance in the vault's ATA — what's withdrawable." />
+                  </span>
+                </th>
+                <th className="px-4 py-3 text-right font-medium">
+                  <span className="inline-flex items-center gap-1 justify-end">
+                    P&amp;L
+                    <HelpHint text="USD value now (token balance × spot price) minus invested USD (SOL spent × SOL price). Live prices via Jupiter Price API." />
+                  </span>
+                </th>
                 <th className="px-4 py-3 text-right font-medium">Status</th>
                 <th className="px-6 py-3 text-right font-medium">Actions</th>
               </tr>

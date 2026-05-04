@@ -5,6 +5,7 @@ import { useWallet } from "@solana/wallet-adapter-react";
 import { PublicKey, LAMPORTS_PER_SOL } from "@solana/web3.js";
 import * as anchor from "@anchor-lang/core";
 import { getProgram, isAlreadyProcessedError, sendTx } from "@/lib/program";
+import { toastSuccess, toastError } from "@/lib/toast";
 
 interface Props {
   vaultPDA: PublicKey | null;
@@ -39,15 +40,25 @@ export default function DepositWithdraw({ vaultPDA, vaultSeed, isAdmin, onSucces
         : program.methods.withdraw(vaultSeed, new anchor.BN(lamports))
             .accounts({ vaultState: vaultPDA, admin: wallet.publicKey });
       const result = await sendTx(builder, browserWallet);
-      console.log(`[${tab}] confirmed:`, result.explorer);
+      toastSuccess(
+        tab === "deposit" ? "Deposit confirmed" : "Withdraw confirmed",
+        `${sol} SOL`,
+        result.explorer,
+      );
       setAmount("");
       onSuccess();
     } catch (e: any) {
       if (isAlreadyProcessedError(e)) {
+        toastSuccess(
+          tab === "deposit" ? "Deposit confirmed" : "Withdraw confirmed",
+          `${sol} SOL`,
+        );
         setAmount("");
         onSuccess();
       } else {
-        setError(e.message ?? "Transaction failed");
+        const msg = e.message ?? "Transaction failed";
+        setError(msg);
+        toastError(tab === "deposit" ? "Deposit failed" : "Withdraw failed", e);
       }
     } finally {
       setLoading(false);
@@ -94,7 +105,7 @@ export default function DepositWithdraw({ vaultPDA, vaultSeed, isAdmin, onSucces
         <button
           onClick={handleSubmit}
           disabled={!connected || loading || (tab === "withdraw" && !isAdmin)}
-          className={`w-full py-2.5 rounded-lg text-sm font-semibold transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${tab === "deposit" ? "bg-purple-600 hover:bg-purple-500 text-white" : "bg-emerald-600 hover:bg-emerald-500 text-white"}`}
+          className={`w-full py-2.5 rounded-lg text-sm font-semibold transition-all disabled:opacity-40 disabled:cursor-not-allowed shadow-lg ${tab === "deposit" ? "bg-gradient-to-br from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white shadow-cyan-500/20" : "bg-gradient-to-br from-emerald-500 to-emerald-700 hover:from-emerald-400 hover:to-emerald-600 text-white shadow-emerald-500/20"}`}
         >
           {loading ? (
             <span className="flex items-center justify-center gap-2">

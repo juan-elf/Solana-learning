@@ -4,7 +4,11 @@ import { useEffect, useState } from "react";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { PublicKey } from "@solana/web3.js";
 import * as anchor from "@anchor-lang/core";
+import { Wallet } from "lucide-react";
 import { getProgram, getVaultPDA, getVaultSeed, isAlreadyProcessedError, lamportsToSol, sendTx, PROGRAM_ID } from "@/lib/program";
+import { toastSuccess, toastError } from "@/lib/toast";
+import { HelpHint } from "./Tooltip";
+import { VaultCardSkeleton } from "./Skeleton";
 
 interface VaultState {
   admin: PublicKey;
@@ -76,20 +80,14 @@ export default function VaultCard({ onVaultLoaded, refreshTrigger }: Props) {
         program.methods.initialize(seed).accounts({ vaultState: pda, user: wallet.publicKey }),
         browserWallet,
       );
-      console.log("[initialize] confirmed:", result.explorer);
+      toastSuccess("Vault initialized", "Per-wallet PDA created", result.explorer);
       setReloadTick((n) => n + 1);
     } catch (e: any) {
       if (isAlreadyProcessedError(e)) {
         setReloadTick((n) => n + 1);
         return;
       }
-      let msg = e.message ?? "Unknown error";
-      if (typeof e.getLogs === "function") {
-        try { const logs = await e.getLogs(); msg = logs.join("\n"); } catch {}
-      } else if (e.logs) {
-        msg = e.logs.join("\n");
-      }
-      alert("Initialize failed:\n\n" + msg);
+      toastError("Initialize failed", e);
     } finally {
       setInitializing(false);
     }
@@ -105,14 +103,14 @@ export default function VaultCard({ onVaultLoaded, refreshTrigger }: Props) {
         program.methods.setVaultActive(vaultSeed, active).accounts({ vaultState: vaultPDA, admin: wallet.publicKey }),
         browserWallet,
       );
-      console.log(`[setVaultActive=${active}] confirmed:`, result.explorer);
+      toastSuccess(active ? "Vault resumed" : "Vault paused", undefined, result.explorer);
       setReloadTick((n) => n + 1);
     } catch (e: any) {
       if (isAlreadyProcessedError(e)) {
         setReloadTick((n) => n + 1);
         return;
       }
-      alert(`Set vault active=${active} failed:\n\n` + (e.message ?? "unknown"));
+      toastError(active ? "Resume failed" : "Pause failed", e);
     } finally {
       setTogglingActive(false);
     }
@@ -121,29 +119,29 @@ export default function VaultCard({ onVaultLoaded, refreshTrigger }: Props) {
   if (!wallet.connected) {
     return (
       <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6 flex flex-col items-center justify-center gap-3 min-h-[140px]">
+        <Wallet className="w-6 h-6 text-slate-500" />
         <p className="text-slate-400 text-sm">Connect your wallet to view vault</p>
       </div>
     );
   }
 
   if (loading) {
-    return (
-      <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6 flex items-center justify-center min-h-[140px]">
-        <div className="w-5 h-5 border-2 border-purple-400 border-t-transparent rounded-full animate-spin" />
-      </div>
-    );
+    return <VaultCardSkeleton />;
   }
 
   if (notFound) {
     const seed = wallet.publicKey ? getVaultSeed(wallet.publicKey) : "";
     return (
-      <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6 flex flex-col items-center gap-4 min-h-[140px] justify-center">
-        <p className="text-slate-400 text-sm">Vault belum diinisialisasi</p>
+      <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6 flex flex-col items-center gap-3 min-h-[140px] justify-center">
+        <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-cyan-500/10 to-blue-500/10 border border-cyan-500/20 flex items-center justify-center text-cyan-400 mb-1">
+          <Wallet className="w-5 h-5" />
+        </div>
+        <p className="text-slate-200 text-sm font-medium">Vault belum aktif</p>
         <p className="text-slate-500 text-xs font-mono">seed: {seed}</p>
         <button
           onClick={initializeVault}
           disabled={initializing}
-          className="px-4 py-2 rounded-lg bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white text-sm font-medium transition-colors"
+          className="mt-1 px-4 py-2 rounded-lg bg-gradient-to-br from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 disabled:opacity-50 text-white text-sm font-medium shadow-lg shadow-cyan-500/20 transition-all"
         >
           {initializing ? "Initializing…" : "Initialize Vault"}
         </button>
@@ -191,15 +189,24 @@ export default function VaultCard({ onVaultLoaded, refreshTrigger }: Props) {
           <p className="text-slate-300 text-xs font-mono truncate">{vault.admin.toBase58().slice(0, 16)}…</p>
         </div>
         <div>
-          <p className="text-slate-500 text-xs">Max Slippage</p>
+          <p className="text-slate-500 text-xs flex items-center gap-1">
+            Max Slippage
+            <HelpHint text="Maximum slippage tolerance the bot can use per swap. Enforced on-chain — swaps exceeding this cap are rejected." />
+          </p>
           <p className="text-slate-300 text-xs">{vault.maxSlippageBps / 100}%</p>
         </div>
         <div>
-          <p className="text-slate-500 text-xs">PDA</p>
+          <p className="text-slate-500 text-xs flex items-center gap-1">
+            PDA
+            <HelpHint text="Program Derived Address — the on-chain account holding your vault state. Derived deterministically from the seed." />
+          </p>
           <p className="text-slate-300 text-xs font-mono truncate">{vaultPDA.toBase58().slice(0, 16)}…</p>
         </div>
         <div>
-          <p className="text-slate-500 text-xs">Seed</p>
+          <p className="text-slate-500 text-xs flex items-center gap-1">
+            Seed
+            <HelpHint text="Per-wallet seed (vault_<8 chars of pubkey>) so each wallet gets its own isolated vault." />
+          </p>
           <p className="text-slate-300 text-xs font-mono">{vaultSeed}</p>
         </div>
       </div>
