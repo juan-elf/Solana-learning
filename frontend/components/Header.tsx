@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import dynamic from "next/dynamic";
+import { Waves } from "lucide-react";
 
 const WalletMultiButton = dynamic(
   async () => (await import("@solana/wallet-adapter-react-ui")).WalletMultiButton,
@@ -16,8 +17,8 @@ export default function Header() {
     <header className="border-b border-slate-800 bg-slate-950/80 backdrop-blur sticky top-0 z-10">
       <div className="max-w-5xl mx-auto px-4 h-16 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-cyan-400 to-blue-600 flex items-center justify-center text-white font-bold text-sm shadow-lg shadow-cyan-500/20">
-            A
+          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-cyan-400 to-blue-600 flex items-center justify-center text-white shadow-lg shadow-cyan-500/20">
+            <Waves className="w-4 h-4" strokeWidth={2.5} />
           </div>
           <div className="flex items-baseline gap-2">
             <span className="font-semibold text-white tracking-tight">Aqueduct</span>

@@ -3,6 +3,7 @@
 import { useState, useCallback } from "react";
 import { PublicKey } from "@solana/web3.js";
 import Header from "@/components/Header";
+import Hero from "@/components/Hero";
 import VaultCard from "@/components/VaultCard";
 import DepositWithdraw from "@/components/DepositWithdraw";
 import PairsTable from "@/components/PairsTable";
@@ -26,6 +27,7 @@ export default function Home() {
   return (
     <div className="min-h-screen flex flex-col">
       <Header />
+      <Hero />
 
       <main className="flex-1 max-w-5xl mx-auto w-full px-4 py-8 space-y-6">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
