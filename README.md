@@ -1,6 +1,8 @@
-# Solana DCA Vault
+# Aqueduct
 
-A non-custodial DCA (Dollar-Cost-Averaging) vault on Solana. Users deposit SOL into a per-wallet PDA, register target token pairs (JUP, USDC, BONK, WIF, ...) with allocation caps, and let an off-chain signal bot execute swaps through Jupiter v6 when EMA + RSI conditions trigger. Resulting tokens accumulate in the vault's ATAs and can be withdrawn back to the admin wallet at any time.
+> Streaming SOL into long positions, one signal at a time.
+
+Aqueduct is a non-custodial DCA (Dollar-Cost-Averaging) vault on Solana. Users deposit SOL into a per-wallet PDA, register target token pairs (JUP, USDC, BONK, WIF, ...) with allocation caps, and let an off-chain signal bot execute swaps through Jupiter v6 when EMA + RSI conditions trigger. Resulting tokens accumulate in the vault's ATAs and can be withdrawn back to the admin wallet at any time.
 
 - **Program ID (devnet):** [`FtUGETcAzSFmdjf6gzZKwBYKqp7CoYjykiw8gQ4ZgsjX`](https://explorer.solana.com/address/FtUGETcAzSFmdjf6gzZKwBYKqp7CoYjykiw8gQ4ZgsjX?cluster=devnet)
 - **Frontend:** Next.js 16 + Tailwind, deployable to Vercel
@@ -92,10 +94,10 @@ A non-custodial DCA (Dollar-Cost-Averaging) vault on Solana. Users deposit SOL i
 ## Repo layout
 
 ```
-solana-portofolio/
+aqueduct/
 ├── DEVLOG.md                     # Session-by-session development journal
 ├── README.md                     # ← you are here
-├── my_solana_project/            # Anchor workspace
+├── my_solana_project/            # Anchor workspace (internal crate name kept for IDL stability)
 │   ├── Anchor.toml
 │   ├── programs/my_solana_project/src/
 │   │   ├── lib.rs                # #[program] dispatch

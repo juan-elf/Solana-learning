@@ -42,7 +42,7 @@ export default function Home() {
         />
 
         <p className="text-center text-slate-600 text-xs pb-4">
-          Program{" "}
+          Aqueduct &middot; Program{" "}
           <a
             href="https://explorer.solana.com/address/FtUGETcAzSFmdjf6gzZKwBYKqp7CoYjykiw8gQ4ZgsjX?cluster=devnet"
             target="_blank"
@@ -51,7 +51,7 @@ export default function Home() {
           >
             FtUGETc…sjX
           </a>{" "}
-          · Devnet · Anchor v1 &amp; Jupiter v6
+          &middot; Devnet &middot; Anchor v1 &amp; Jupiter v6
         </p>
       </main>
 
