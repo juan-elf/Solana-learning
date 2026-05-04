@@ -157,6 +157,28 @@ solana program extend <PROGRAM_ID> 30000 -u devnet  # ~0.21 SOL rent reserve
 anchor deploy --provider.cluster devnet
 ```
 
+## Run the test suite
+
+The Anchor program ships with a LiteSVM-based integration suite covering every
+instruction except `execute_swap` (Jupiter CPI is mainnet-only). All 24 tests
+run in-process — no validator required.
+
+```bash
+cd my_solana_project
+anchor build                            # produces target/deploy/*.so
+cargo test --features no-entrypoint     # runs vault_lifecycle, pair_management, withdraw_pair_tokens
+```
+
+The `--features no-entrypoint` flag is required: without it, both the program
+and `spl-token` register a `solana_program::entrypoint` symbol and the test
+binary fails to link.
+
+What's covered (24 tests across 3 files):
+
+- `vault_lifecycle.rs` — initialize defaults, double-init rejection, deposit/withdraw with admin guard, withdraw zero/over-balance error paths, set_vault_active flip + non-admin rejection
+- `pair_management.rs` — add_pair happy path, max_bps boundaries (0 / 10001 / 10000), duplicate rejection, has_one guard, vault-paused gate
+- `withdraw_pair_tokens.rs` — full SPL setup (mint creation, ATA, mint_to), happy path, zero/over-balance/non-admin errors, plus the "still works when vault paused" pin (admin must always be able to recover funds)
+
 ## Run the signal bot (off-chain DCA executor)
 
 Prereq: filled vault, registered pair(s) with `max_bps`, wallet keypair at `~/.config/solana/id.json`.
@@ -217,7 +239,7 @@ See [`DEVLOG.md`](./DEVLOG.md) for a chronological account of what was built, wh
 
 ## Roadmap
 
-- [ ] LiteSVM unit tests for every instruction + error path
+- [x] LiteSVM unit tests for every instruction + error path (24/24 passing)
 - [ ] Pyth on-chain `expected_out` lookup (replace bot-supplied value)
 - [ ] DCA swap-back to SOL via Jupiter (Opsi B from Sesi 5)
 - [ ] Mainnet deploy + live signal bot
